@@ -2,7 +2,7 @@
 #
 # SuperResolution
 #
-# Vladislav Vinogradov <vlad.vinogradov47@gmail.com>
+# Vladislav Vinogradov (jet47)
 #
 
 ########### CMake properties ########### 
@@ -17,9 +17,6 @@ set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS true)
 project(SuperResolution)
 
 ############ Build options #############
-
-set(LIBRARY_OUTPUT_PATH "${CMAKE_BINARY_DIR}/lib" CACHE PATH "Output directory for libraries")
-set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin" CACHE PATH "Output directory for applications")
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)")
 set(BUILD_TEST_APP ON CACHE BOOL "Build test application")
@@ -40,4 +37,19 @@ add_subdirectory(lib)
 if(BUILD_TEST_APP)
     add_subdirectory(test)
 endif()
+
+################ CPack #################
+
+include(InstallRequiredSystemLibraries)
+
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Implementation of different Super Resolution algorithms")
+set(CPACK_PACKAGE_VENDOR "Vladislav Vinogradov (jet47)")
+set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/COPYING")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_PACKAGE_VERSION_MAJOR "0")
+set(CPACK_PACKAGE_VERSION_MINOR "1")
+set(CPACK_PACKAGE_VERSION_PATCH "3")
+
+include(CPack)
 

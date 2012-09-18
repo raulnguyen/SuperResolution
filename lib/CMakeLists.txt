@@ -2,7 +2,7 @@
 #
 # SuperResolution library
 #
-# Vladislav Vinogradov <vlad.vinogradov47@gmail.com>
+# Vladislav Vinogradov (jet47)
 #
 
 file(GLOB HEADER_FILES "include/*.h" "include/*.hpp")
@@ -18,8 +18,10 @@ set(TARGET_NAME ${LIBRARY_NAME})
 add_library(${TARGET_NAME} ${HEADER_FILES} ${SOURCE_FILES} ${INTERNAL_HEADER_FILES})
 
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
+   
+install(FILES ${HEADER_FILES} DESTINATION include)
 
-set_target_properties(${TARGET_NAME} PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_PATH}"
-    RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
+if(BUILD_SHARED_LIBS)
+    install(TARGETS ${TARGET_NAME} LIBRARY DESTINATION lib)
+endif()
 
