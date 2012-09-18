@@ -3,6 +3,8 @@
 #ifndef __SUPER_RESOLUTION_H__
 #define __SUPER_RESOLUTION_H__
 
+#include <vector>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
@@ -11,63 +13,31 @@ class SuperResolution
 public:
     SuperResolution();
 
-    void release();
+    void train(const std::vector<cv::Mat>& images, int step = 1);
+    template <class Iter> void train(Iter begin, Iter end, int step = 1);
+    void train(const cv::Mat& image, int step = 1);
 
-    template <class Iter>
-    void train(Iter begin, Iter end, double step = 1.0);
-    void train(const cv::Mat& image, double step = 1.0) { train(&image, &image + 1, step); }
+    void clear();
 
     void operator ()(const cv::Mat& src, cv::Mat& dst);
 
     int lowResPatchSize;
     int highResPatchSize;
-    int patchInterpolation;
+    double stdDevThresh;
     cv::Ptr<cv::DescriptorMatcher> matcher;
 
 private:
-    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches, double step);
+    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches, int step);
 
     cv::Mat lowResPatches;
     cv::Mat highResPatches;
 };
 
 template <class Iter>
-void SuperResolution::train(Iter begin, Iter end, double step)
+void SuperResolution::train(Iter begin, Iter end, int step)
 {
-    std::vector<cv::Mat> lowResPatchesVec;
-    std::vector<cv::Mat> highResPatchesVec;
-
-    int totalCount = 0;
-    for (Iter it = begin; it != end; ++it)
-    {
-        cv::Mat low, high;
-        buildPatchLists(*it, low, high, step);
-
-        if (!low.empty())
-        {
-            totalCount += low.rows;
-            lowResPatchesVec.push_back(low);
-            highResPatchesVec.push_back(high);
-        }
-    }
-
-    if (totalCount == 0)
-    {
-        release();
-    }
-    else
-    {
-        lowResPatches.create(totalCount, lowResPatchesVec[0].cols, lowResPatchesVec[0].type());
-        highResPatches.create(totalCount, highResPatchesVec[0].cols, highResPatchesVec[0].type());
-
-        int startRow = 0;
-        for (size_t i = 0; i < lowResPatchesVec.size(); ++i)
-        {
-            lowResPatchesVec[i].copyTo(lowResPatches.rowRange(startRow, startRow + lowResPatchesVec[i].rows));
-            highResPatchesVec[i].copyTo(highResPatches.rowRange(startRow, startRow + lowResPatchesVec[i].rows));
-            startRow += lowResPatchesVec[i].rows;
-        }
-    }
+    std::vector<cv::Mat> images(begin, end);
+    train(images, step);
 }
 
 #endif // __SUPER_RESOLUTION_H__

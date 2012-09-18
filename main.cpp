@@ -4,6 +4,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/contrib/contrib.hpp>
 
 #include "SuperResolution.h"
 
@@ -18,24 +19,30 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    Mat image = imread(argv[1]/*, IMREAD_GRAYSCALE*/);
+    Mat image = imread(argv[1]);
     if (image.empty())
     {
         cerr << "Can't open image " << argv[1] << endl;
         return -1;
     }
 
+    TickMeter tm;
+
     SuperResolution superRes;
+    Mat highResImage;
 
-    Mat superRes_result;
-    superRes(image, superRes_result);
+    tm.reset(); tm.start();
+    superRes.train(image);
+    tm.stop();
+    cout << "Train Time : " << tm.getTimeMilli() << " ms" << endl;
+
+    tm.reset(); tm.start();
+    superRes(image, highResImage);
+    tm.stop();
+    cout << "Process Time : " << tm.getTimeMilli() << " ms" << endl;
+
     namedWindow("Super Resolution", WINDOW_NORMAL);
-    imshow("Super Resolution", superRes_result);
-
-    Mat bicubic_result;
-    resize(image, bicubic_result, Size(), 2, 2, INTER_CUBIC);
-    namedWindow("Bi-Cubic interpolation", WINDOW_NORMAL);
-    imshow("Bi-Cubic interpolation", bicubic_result);
+    imshow("Super Resolution", highResImage);
 
     waitKey();
 
