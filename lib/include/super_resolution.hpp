@@ -1,14 +1,24 @@
 #pragma once
 
-#ifndef __SUPER_RESOLUTION_H__
-#define __SUPER_RESOLUTION_H__
+#ifndef __SUPER_RESOLUTION_HPP__
+#define __SUPER_RESOLUTION_HPP__
 
 #include <vector>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
-class SuperResolution
+#if defined WIN32 || defined _WIN32 || defined WINCE
+#   if defined SUPER_RESOLUTION_SHARED
+#       define SUPER_RESOLUTION_EXPORTS __declspec(dllexport)
+#   else
+#       define SUPER_RESOLUTION_EXPORTS __declspec(dllimport)
+#   endif
+#else
+#   define SUPER_RESOLUTION_EXPORTS
+#endif
+
+class SUPER_RESOLUTION_EXPORTS SuperResolution
 {
 public:
     SuperResolution();

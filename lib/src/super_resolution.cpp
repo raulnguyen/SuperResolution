@@ -1,4 +1,4 @@
-#include "SuperResolution.h"
+#include "super_resolution.hpp"
 
 #include <cstring>
 #include <cmath>
