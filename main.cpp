@@ -19,7 +19,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    Mat image = imread(argv[1]/*, IMREAD_GRAYSCALE*/);
+    Mat image = imread(argv[1]);
     if (image.empty())
     {
         cerr << "Can't open image " << argv[1] << endl;

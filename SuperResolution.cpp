@@ -167,7 +167,50 @@ SuperResolution::SuperResolution()
     matcher = new BFMatcher(NORM_L2SQR);
 }
 
-void SuperResolution::release()
+void SuperResolution::train(const vector<Mat>& images, double step)
+{
+    vector<Mat> lowResPatchesVec;
+    vector<Mat> highResPatchesVec;
+
+    int totalCount = 0;
+    for (size_t i = 0; i < images.size(); ++i)
+    {
+        cv::Mat low, high;
+        buildPatchLists(images[i], low, high, step);
+
+        if (!low.empty())
+        {
+            totalCount += low.rows;
+            lowResPatchesVec.push_back(low);
+            highResPatchesVec.push_back(high);
+        }
+    }
+
+    if (totalCount == 0)
+    {
+        clear();
+    }
+    else
+    {
+        lowResPatches.create(totalCount, lowResPatchesVec[0].cols, lowResPatchesVec[0].type());
+        highResPatches.create(totalCount, highResPatchesVec[0].cols, highResPatchesVec[0].type());
+
+        int startRow = 0;
+        for (size_t i = 0; i < lowResPatchesVec.size(); ++i)
+        {
+            lowResPatchesVec[i].copyTo(lowResPatches.rowRange(startRow, startRow + lowResPatchesVec[i].rows));
+            highResPatchesVec[i].copyTo(highResPatches.rowRange(startRow, startRow + lowResPatchesVec[i].rows));
+            startRow += lowResPatchesVec[i].rows;
+        }
+    }
+}
+
+void SuperResolution::train(const Mat& image, double step)
+{
+    buildPatchLists(image, lowResPatches, highResPatches, step);
+}
+
+void SuperResolution::clear()
 {
     lowResPatches.release();
     highResPatches.release();
