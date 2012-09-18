@@ -29,16 +29,20 @@ int main(int argc, const char* argv[])
     TickMeter tm;
 
     SuperResolution superRes;
-    Mat superRes_result;
+    Mat highResImage;
 
-    tm.start();
-    superRes(image, superRes_result);
+    tm.reset(); tm.start();
+    superRes.train(image);
     tm.stop();
+    cout << "Train Time : " << tm.getTimeMilli() << " ms" << endl;
 
-    cout << "Time : " << tm.getTimeMilli() << " ms" << endl;
+    tm.reset(); tm.start();
+    superRes(image, highResImage);
+    tm.stop();
+    cout << "Process Time : " << tm.getTimeMilli() << " ms" << endl;
 
     namedWindow("Super Resolution", WINDOW_NORMAL);
-    imshow("Super Resolution", superRes_result);
+    imshow("Super Resolution", highResImage);
 
     waitKey();
 

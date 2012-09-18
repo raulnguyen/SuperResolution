@@ -13,9 +13,9 @@ class SuperResolution
 public:
     SuperResolution();
 
-    void train(const std::vector<cv::Mat>& images, double step = 1.0);
-    template <class Iter> void train(Iter begin, Iter end, double step = 1.0);
-    void train(const cv::Mat& image, double step = 1.0);
+    void train(const std::vector<cv::Mat>& images, int step = 1);
+    template <class Iter> void train(Iter begin, Iter end, int step = 1);
+    void train(const cv::Mat& image, int step = 1);
 
     void clear();
 
@@ -23,18 +23,17 @@ public:
 
     int lowResPatchSize;
     int highResPatchSize;
-    int patchInterpolation;
     cv::Ptr<cv::DescriptorMatcher> matcher;
 
 private:
-    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches, double step);
+    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches, int step);
 
     cv::Mat lowResPatches;
     cv::Mat highResPatches;
 };
 
 template <class Iter>
-void SuperResolution::train(Iter begin, Iter end, double step)
+void SuperResolution::train(Iter begin, Iter end, int step)
 {
     std::vector<cv::Mat> images(begin, end);
     train(images, step);
