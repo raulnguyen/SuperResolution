@@ -54,6 +54,9 @@ int main(int argc, const char* argv[])
     Mat diff;
     absdiff(goldImage, highResImage, diff);
 
+    Mat bicubic;
+    resize(lowResImage, bicubic, Size(), 2, 2, INTER_CUBIC);
+
     namedWindow("Gold Image", WINDOW_NORMAL);
     imshow("Gold Image", goldImage);
 
@@ -62,6 +65,9 @@ int main(int argc, const char* argv[])
 
     namedWindow("Diff", WINDOW_NORMAL);
     imshow("Diff", diff);
+
+    namedWindow("Bi-Cubic Interpolation", WINDOW_NORMAL);
+    imshow("Bi-Cubic Interpolation", bicubic);
 
     waitKey();
 
