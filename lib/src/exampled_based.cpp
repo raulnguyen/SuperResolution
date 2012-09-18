@@ -1,93 +1,41 @@
-#include "SuperResolution.h"
-
+#include "exampled_based.hpp"
 #include <cstring>
 #include <cmath>
-
-#include <vector>
-
+#include <opencv2/core/internal.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include "extract_patch.hpp"
 
 using namespace std;
 using namespace cv;
 
-///////////////////////////////////////////////////////////////////////
-// Extract Patch
+CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
+                  obj.info()->addParam(obj, "patchStep", obj.patchStep, false, 0, 0,
+                                       "Step between patches in training.");
+                  obj.info()->addParam(obj, "lowResPatchSize", obj.lowResPatchSize, false, 0, 0,
+                                       "Size of low-resolution patches.");
+                  obj.info()->addParam(obj, "highResPatchSize", obj.highResPatchSize, false, 0, 0,
+                                       "Size of high-resolution patches.");
+                  obj.info()->addParam(obj, "stdDevThresh", obj.stdDevThresh, false, 0, 0,
+                                       "Threshold value for patch standard deviation, only patches with high deviation will be processed.");
+                  obj.info()->addParam<DescriptorMatcher>(obj, "matcher", obj.matcher, false, 0, 0,
+                                                          "Matching algorithm."));
 
-namespace
+Ptr<SuperResolution> ExampledBased::create()
 {
-    template <typename T, typename D>
-    void extractPatchImpl(const Mat& src, Point p, vector<D>& patch, int patchSize)
-    {
-        CV_DbgAssert(patchSize % 2 != 0);
-
-        const int cn = src.channels();
-        const int rad = patchSize / 2;
-
-        patch.resize(patchSize * patchSize * cn);
-
-        typename vector<D>::iterator patchIt = patch.begin();
-
-        for (int dy = -rad; dy <= rad; ++dy)
-        {
-            const int y = borderInterpolate(p.y + dy, src.rows, BORDER_REFLECT_101);
-            const T* srcRow = src.ptr<T>(y);
-
-            for (int dx = -rad; dx <= rad; ++dx)
-            {
-                const int x = borderInterpolate(p.x + dx, src.cols, BORDER_REFLECT_101);
-
-                for (int c = 0; c < cn; ++c)
-                    *patchIt++ = saturate_cast<D>(srcRow[x * cn + c]);
-            }
-        }
-    }
-
-    template <typename T>
-    void extractPatch(const Mat& src, Point p, vector<T>& patch, int patchSize)
-    {
-        typedef void (*func_t)(const Mat& src, Point p, vector<T>& patch, int patchSize);
-        static const func_t funcs[] =
-        {
-            extractPatchImpl<uchar , T>,
-            extractPatchImpl<schar , T>,
-            extractPatchImpl<ushort, T>,
-            extractPatchImpl<short , T>,
-            extractPatchImpl<int   , T>,
-            extractPatchImpl<float , T>,
-            extractPatchImpl<double, T>
-        };
-
-        CV_DbgAssert(src.depth() >= CV_8U && src.depth() <= CV_64F);
-
-        const func_t func = funcs[src.depth()];
-        CV_DbgAssert(func != 0);
-
-        func(src, p, patch, patchSize);
-    }
-
-    template <typename T>
-    void scalePatch(vector<T>& patch, int patchSize, int cn, Scalar scale)
-    {
-        CV_DbgAssert(patch.size() == patchSize * patchSize * cn);
-
-        for (int i = 0, ind = 0; i < patchSize * patchSize; ++i)
-            for (int c = 0; c < cn; ++c, ++ind)
-                patch[ind] /= scale[c];
-    }
+    CV_DbgAssert( !ExampledBased_info_auto.name().empty() );
+    return Ptr<SuperResolution>(new ExampledBased);
 }
 
-///////////////////////////////////////////////////////////////////////
-// SuperResolution
-
-SuperResolution::SuperResolution()
+ExampledBased::ExampledBased()
 {
+    patchStep = 1.0;
     lowResPatchSize = 7;
     highResPatchSize = 5;
     stdDevThresh = 15.0;
     matcher = new BFMatcher(NORM_L2SQR);
 }
 
-void SuperResolution::train(const vector<Mat>& images, int step)
+void ExampledBased::train(const vector<Mat>& images)
 {
     vector<Mat> lowResPatchesVec;
     vector<Mat> highResPatchesVec;
@@ -95,8 +43,8 @@ void SuperResolution::train(const vector<Mat>& images, int step)
     int totalCount = 0;
     for (size_t i = 0; i < images.size(); ++i)
     {
-        cv::Mat low, high;
-        buildPatchLists(images[i], low, high, step);
+        Mat low, high;
+        buildPatchLists(images[i], low, high);
 
         if (!low.empty())
         {
@@ -134,21 +82,22 @@ void SuperResolution::train(const vector<Mat>& images, int step)
     }
 }
 
-void SuperResolution::train(const Mat& image, int step)
+void ExampledBased::train(const Mat& image)
 {
-    buildPatchLists(image, lowResPatches, highResPatches, step);
+    buildPatchLists(image, lowResPatches, highResPatches);
 }
 
-void SuperResolution::clear()
+void ExampledBased::clear()
 {
     lowResPatches.release();
     highResPatches.release();
 }
 
-void SuperResolution::operator ()(const Mat& src, Mat& dst)
+void ExampledBased::process(const Mat& src, Mat& dst)
 {
-    CV_Assert(lowResPatchSize % 2 != 0);
-    CV_Assert(highResPatchSize % 2 != 0);
+    CV_DbgAssert(lowResPatchSize > 0 && lowResPatchSize % 2 != 0);
+    CV_DbgAssert(highResPatchSize > 0 && highResPatchSize % 2 != 0);
+    CV_DbgAssert(!matcher.empty());
 
     if (lowResPatches.empty())
         train(src);
@@ -246,8 +195,10 @@ void SuperResolution::operator ()(const Mat& src, Mat& dst)
     result.convertTo(dst, CV_8U);
 }
 
-void SuperResolution::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Mat& highResPatches, int step)
+void ExampledBased::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Mat& highResPatches)
 {
+    CV_DbgAssert(patchStep > 0);
+
     const int cn = highRes.channels();
 
     Mat lowRes;
@@ -257,7 +208,7 @@ void SuperResolution::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Ma
 
     const int lowRad = lowResPatchSize / 2;
 
-    const int maxPatchNumber = cvCeil((lowRes.cols + lowRad) / step) * cvCeil((lowRes.rows + lowRad) / step);
+    const int maxPatchNumber = cvCeil((lowRes.cols + lowRad) / patchStep) * cvCeil((lowRes.rows + lowRad) / patchStep);
 
     lowResPatches.create(maxPatchNumber, (lowResPatchSize * lowResPatchSize + 2 * highResPatchSize - 1) * cn, CV_32F);
     highResPatches.create(maxPatchNumber, highResPatchSize * highResPatchSize * cn, CV_32F);
@@ -266,12 +217,12 @@ void SuperResolution::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Ma
     vector<float> highResPatch;
 
     int patchNum = 0;
-    Point pLow, pHigh;
-    for (pLow.y = 0, pHigh.y = pLow.y * 2; pLow.y < lowRes.rows + lowRad; pLow.y += step, pHigh.y = pLow.y * 2)
+    Point2d pLow, pHigh;
+    for (pLow.y = 0, pHigh.y = pLow.y * 2; pLow.y < lowRes.rows + lowRad; pLow.y += patchStep, pHigh.y = pLow.y * 2)
     {
-        for (pLow.x = 0, pHigh.x = pLow.x * 2; pLow.x < lowRes.cols + lowRad; pLow.x += step, pHigh.x = pLow.x * 2)
+        for (pLow.x = 0, pHigh.x = pLow.x * 2; pLow.x < lowRes.cols + lowRad; pLow.x += patchStep, pHigh.x = pLow.x * 2)
         {
-            extractPatch(lowRes, pLow, lowResPatch, lowResPatchSize);
+            extractPatch(lowRes, pLow, lowResPatch, lowResPatchSize, cv::INTER_LINEAR);
 
             Scalar mean, stddev;
             meanStdDev(Mat(lowResPatchSize, lowResPatchSize, CV_32FC(cn), &lowResPatch[0]), mean, stddev);
@@ -286,7 +237,7 @@ void SuperResolution::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Ma
 
             scalePatch(lowResPatch, lowResPatchSize, cn, mean);
 
-            extractPatch(highRes, pHigh, highResPatch, highResPatchSize);
+            extractPatch(highRes, pHigh, highResPatch, highResPatchSize, cv::INTER_LINEAR);
 
             scalePatch(highResPatch, highResPatchSize, cn, mean);
 

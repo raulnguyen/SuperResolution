@@ -6,7 +6,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/contrib/contrib.hpp>
 
-#include "SuperResolution.h"
+#include "super_resolution.hpp"
 
 using namespace std;
 using namespace cv;
@@ -43,13 +43,11 @@ int main(int argc, const char* argv[])
     Mat lowResImage;
     pyrDown(goldImage, lowResImage);
 
-    SuperResolution superRes;
+    Ptr<SuperResolution> superRes = SuperResolution::create(SuperResolution::EXAMPLE_BASED);
     Mat highResImage;
 
-//    MEASURE_TIME(superRes.train(lowResImage), "Train");
-    MEASURE_TIME(superRes.train(goldImage), "Train");
-
-    MEASURE_TIME(superRes(lowResImage, highResImage), "Process");
+    MEASURE_TIME(superRes->train(goldImage), "Train");
+    MEASURE_TIME(superRes->process(lowResImage, highResImage), "Process");
 
     Mat diff;
     absdiff(goldImage, highResImage, diff);
