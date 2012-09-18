@@ -23,6 +23,7 @@ public:
 
     int lowResPatchSize;
     int highResPatchSize;
+    double stdDevThresh;
     cv::Ptr<cv::DescriptorMatcher> matcher;
 
 private:

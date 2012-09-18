@@ -83,6 +83,7 @@ SuperResolution::SuperResolution()
 {
     lowResPatchSize = 7;
     highResPatchSize = 5;
+    stdDevThresh = 15.0;
     matcher = new BFMatcher(NORM_L2SQR);
 }
 
@@ -170,7 +171,7 @@ void SuperResolution::operator ()(const Mat& src, Mat& dst)
 
     vector<DMatch> matches;
 
-    Mat dstNew(dst.size(), CV_32FC(cn));
+    Mat dstNew;
 
     const double weight = 1.0 / (highRad * highRad + 1.0);
     Mat result;
@@ -180,6 +181,8 @@ void SuperResolution::operator ()(const Mat& src, Mat& dst)
     {
         for (int j = 0; j < highRad; ++j)
         {
+            dst.convertTo(dstNew, CV_32F);
+
             Point pLow, pHigh;
             for (pHigh.y = i, pLow.y = pHigh.y / 2; pHigh.y < dst.rows + highRad; pHigh.y += highResPatchSize - 1, pLow.y = pHigh.y / 2)
             {
@@ -189,6 +192,9 @@ void SuperResolution::operator ()(const Mat& src, Mat& dst)
 
                     Scalar mean, stddev;
                     meanStdDev(Mat(lowResPatchSize, lowResPatchSize, CV_32FC(cn), &lowResPatch[0]), mean, stddev);
+
+                    if (stddev[0] < stdDevThresh && stddev[1] < stdDevThresh && stddev[2] < stdDevThresh && stddev[3] < stdDevThresh)
+                        continue;
 
                     mean[0] += numeric_limits<double>::epsilon();
                     mean[1] += numeric_limits<double>::epsilon();
@@ -269,6 +275,9 @@ void SuperResolution::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Ma
 
             Scalar mean, stddev;
             meanStdDev(Mat(lowResPatchSize, lowResPatchSize, CV_32FC(cn), &lowResPatch[0]), mean, stddev);
+
+            if (stddev[0] < stdDevThresh && stddev[1] < stdDevThresh && stddev[2] < stdDevThresh && stddev[3] < stdDevThresh)
+                continue;
 
             mean[0] += numeric_limits<double>::epsilon();
             mean[1] += numeric_limits<double>::epsilon();
