@@ -4,9 +4,7 @@
 #define __SUPER_RESOLUTION_HPP__
 
 #include <vector>
-
 #include <opencv2/core/core.hpp>
-#include <opencv2/features2d/features2d.hpp>
 
 #if defined WIN32 || defined _WIN32 || defined WINCE
 #   if defined SUPER_RESOLUTION_SHARED
@@ -18,36 +16,33 @@
 #   define SUPER_RESOLUTION_EXPORTS
 #endif
 
-class SUPER_RESOLUTION_EXPORTS SuperResolution
+class SUPER_RESOLUTION_EXPORTS SuperResolution : public cv::Algorithm
 {
 public:
-    SuperResolution();
+    enum Method
+    {
+        EXAMPLE_BASED,
+        METHOD_MAX
+    };
 
-    void train(const std::vector<cv::Mat>& images, int step = 1);
-    template <class Iter> void train(Iter begin, Iter end, int step = 1);
-    void train(const cv::Mat& image, int step = 1);
+    static cv::Ptr<SuperResolution> create(Method method);
 
-    void clear();
+    virtual ~SuperResolution();
 
-    void operator ()(const cv::Mat& src, cv::Mat& dst);
+    virtual void train(const std::vector<cv::Mat>& images) = 0;
+    virtual void train(const cv::Mat& image);
+    template <class Iter> void train(Iter begin, Iter end);
 
-    int lowResPatchSize;
-    int highResPatchSize;
-    double stdDevThresh;
-    cv::Ptr<cv::DescriptorMatcher> matcher;
+    virtual void clear() = 0;
 
-private:
-    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches, int step);
-
-    cv::Mat lowResPatches;
-    cv::Mat highResPatches;
+    virtual void process(const cv::Mat& src, cv::Mat& dst) = 0;
 };
 
 template <class Iter>
-void SuperResolution::train(Iter begin, Iter end, int step)
+void SuperResolution::train(Iter begin, Iter end)
 {
     std::vector<cv::Mat> images(begin, end);
-    train(images, step);
+    train(images);
 }
 
-#endif // __SUPER_RESOLUTION_H__
+#endif // __SUPER_RESOLUTION_HPP__
