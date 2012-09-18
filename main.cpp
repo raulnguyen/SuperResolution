@@ -4,6 +4,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/contrib/contrib.hpp>
 
 #include "SuperResolution.h"
 
@@ -25,17 +26,19 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    SuperResolution superRes;
+    TickMeter tm;
 
+    SuperResolution superRes;
     Mat superRes_result;
+
+    tm.start();
     superRes(image, superRes_result);
+    tm.stop();
+
+    cout << "Time : " << tm.getTimeMilli() << " ms" << endl;
+
     namedWindow("Super Resolution", WINDOW_NORMAL);
     imshow("Super Resolution", superRes_result);
-
-    Mat bicubic_result;
-    resize(image, bicubic_result, Size(), 2, 2, INTER_CUBIC);
-    namedWindow("Bi-Cubic interpolation", WINDOW_NORMAL);
-    imshow("Bi-Cubic interpolation", bicubic_result);
 
     waitKey();
 
