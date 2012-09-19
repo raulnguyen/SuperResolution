@@ -30,18 +30,9 @@
 
 #include <vector>
 #include <opencv2/core/core.hpp>
+#include "super_resolution_export.h"
 
-#if defined WIN32 || defined _WIN32 || defined WINCE
-#   if defined SUPER_RESOLUTION_SHARED
-#       define SUPER_RESOLUTION_EXPORTS __declspec(dllexport)
-#   else
-#       define SUPER_RESOLUTION_EXPORTS __declspec(dllimport)
-#   endif
-#else
-#   define SUPER_RESOLUTION_EXPORTS
-#endif
-
-class SUPER_RESOLUTION_EXPORTS SuperResolution : public cv::Algorithm
+class SUPER_RESOLUTION_EXPORT SuperResolution : public cv::Algorithm
 {
 public:
     enum Method
