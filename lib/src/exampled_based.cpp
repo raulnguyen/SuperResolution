@@ -34,6 +34,8 @@ using namespace std;
 using namespace cv;
 
 CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
+                  obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                       "Scale factor.");
                   obj.info()->addParam(obj, "patchStep", obj.patchStep, false, 0, 0,
                                        "Step between patches in training.");
                   obj.info()->addParam(obj, "lowResPatchSize", obj.lowResPatchSize, false, 0, 0,
@@ -53,6 +55,7 @@ Ptr<SuperResolution> ExampledBased::create()
 
 ExampledBased::ExampledBased()
 {
+    scale = 2.0;
     patchStep = 1.0;
     lowResPatchSize = 7;
     highResPatchSize = 5;
@@ -120,6 +123,7 @@ void ExampledBased::clear()
 
 void ExampledBased::process(const Mat& src, Mat& dst)
 {
+    CV_DbgAssert(scale > 1);
     CV_DbgAssert(lowResPatchSize > 0 && lowResPatchSize % 2 != 0);
     CV_DbgAssert(highResPatchSize > 0 && highResPatchSize % 2 != 0);
     CV_DbgAssert(!matcher.empty());
@@ -133,7 +137,7 @@ void ExampledBased::process(const Mat& src, Mat& dst)
 
     const int highRad = highResPatchSize / 2;
 
-    pyrUp(src, dst);
+    resize(src, dst, Size(), scale, scale, INTER_CUBIC);
 
     if (lowResPatches.empty())
         return;
@@ -227,7 +231,7 @@ void ExampledBased::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Mat&
     const int cn = highRes.channels();
 
     Mat lowRes;
-    pyrDown(highRes, lowRes);
+    resize(highRes, lowRes, Size(), 1.0 / scale, 1.0 / scale, INTER_CUBIC);
 
     const float alpha = static_cast<float>(0.1 * lowResPatchSize * lowResPatchSize / (2.0 * highResPatchSize - 1.0));
 

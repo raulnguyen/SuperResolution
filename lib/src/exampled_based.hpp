@@ -52,6 +52,8 @@ protected:
     void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches);
 
 private:
+    double scale;
+
     double patchStep;
 
     int lowResPatchSize;

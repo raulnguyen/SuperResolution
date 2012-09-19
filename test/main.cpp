@@ -60,16 +60,15 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    if (goldImage.cols % 2 != 0)
-        goldImage = goldImage.colRange(0, goldImage.cols - 1);
-    if (goldImage.rows % 2 != 0)
-        goldImage = goldImage.rowRange(0, goldImage.rows - 1);
+    const double scale = 2.0;
 
     Mat lowResImage;
-    pyrDown(goldImage, lowResImage);
+    resize(goldImage, lowResImage, Size(), 1.0 / scale, 1.0 / scale);
 
     Ptr<SuperResolution> superRes = SuperResolution::create(SuperResolution::EXAMPLE_BASED);
     Mat highResImage;
+
+    superRes->set("scale", scale);
 
     MEASURE_TIME(superRes->train(goldImage), "Train");
     MEASURE_TIME(superRes->process(lowResImage, highResImage), "Process");
