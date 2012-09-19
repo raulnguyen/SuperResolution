@@ -5,7 +5,7 @@
 # Vladislav Vinogradov (jet47)
 #
 
-set(TARGET_NAME super_resolution_test)
+set(TARGET_NAME ${SUPER_RESOLUTION_LIBRARY_NAME}_test)
 
 file(GLOB HEADER_FILES *.h *.hpp)
 file(GLOB SOURCE_FILES *.c *.cpp)

@@ -22,7 +22,7 @@ set(SUPER_RESOLUTION_VERSION ${SUPER_RESOLUTION_VERSION_MAJOR}.${SUPER_RESOLUTIO
 
 ############ Build options #############
 
-option(BUILD_SHARED_LIBS "Build Shared Libraries" ON)
+option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
 option(BUILD_TEST_APP "Build test application" OFF)
 
 ############ Find packages #############
