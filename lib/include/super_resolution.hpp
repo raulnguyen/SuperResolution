@@ -33,16 +33,16 @@
 #include <opencv2/core/core.hpp>
 #include "super_resolution_export.h"
 
-enum Method
+enum SingleSRMethod
 {
-    SR_EXAMPLE_BASED,
-    SR_METHOD_MAX
+    SINGLE_SR_EXAMPLE_BASED,
+    SINGLE_SR_METHOD_MAX
 };
 
 class SUPER_RESOLUTION_EXPORT SingleImageSuperResolution : public cv::Algorithm
 {
 public:
-    static cv::Ptr<SingleImageSuperResolution> create(Method method);
+    static cv::Ptr<SingleImageSuperResolution> create(SingleSRMethod method);
 
     virtual ~SingleImageSuperResolution();
 

@@ -31,7 +31,7 @@
 #include <opencv2/features2d/features2d.hpp>
 #include "super_resolution.hpp"
 
-// W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution. Comp. Graph. Appl., (2), 2002
+// W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
 class ExampledBased : public SingleImageSuperResolution
 {
 public:

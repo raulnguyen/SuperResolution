@@ -29,7 +29,7 @@
 using namespace std;
 using namespace cv;
 
-Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(Method method)
+Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(SingleSRMethod method)
 {
     typedef Ptr<SingleImageSuperResolution> (*func_t)();
     static const func_t funcs[] =
@@ -37,7 +37,7 @@ Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(Method method
         ExampledBased::create
     };
 
-    CV_DbgAssert(method >= SR_EXAMPLE_BASED && method < SR_METHOD_MAX);
+    CV_DbgAssert(method >= SINGLE_SR_EXAMPLE_BASED && method < SINGLE_SR_METHOD_MAX);
 
     return funcs[method]();
 }

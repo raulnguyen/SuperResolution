@@ -328,8 +328,6 @@ void ExampledBased::load(const string& fileName)
     cv::read(fs["highResPatches"], highResPatches);
 
     CV_DbgAssert(lowResPatches.rows == highResPatches.rows);
-    CV_DbgAssert(lowResPatches.cols == (lowResPatchSize * lowResPatchSize + 2 * highResPatchSize - 1) * cn);
-    CV_DbgAssert(highResPatches.cols == highResPatchSize * highResPatchSize * cn);
 }
 
 bool ExampledBased::empty() const

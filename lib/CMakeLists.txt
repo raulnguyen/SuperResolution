@@ -5,7 +5,7 @@
 # Vladislav Vinogradov (jet47)
 #
 
-set(TARGET_NAME ${LIBRARY_NAME})
+set(TARGET_NAME ${PROJECT_BASE_NAME})
 
 file(GLOB HEADER_FILES "include/*.h" "include/*.hpp")
 file(GLOB SOURCE_FILES "src/*.c" "src/*.cpp")

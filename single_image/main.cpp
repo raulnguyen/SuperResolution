@@ -85,7 +85,7 @@ int main(int argc, const char* argv[])
     CommandLineParser cmd(argc, argv,
         "{ image i | boy.png | Input image }"
         "{ scale s | 2       | Scale factor }"
-        "{ train t |         | Train images (separated by :) }"
+        "{ train t | none    | Train images (separated by :) }"
     );
 
     const string imageFileName = cmd.get<string>("image");
@@ -100,19 +100,22 @@ int main(int argc, const char* argv[])
 
     vector<Mat> trainImages;
     const string trainImagesStr = cmd.get<string>("train");
-    const vector<string> trainImagesStrVec = split_string(trainImagesStr, ':');
-    for (size_t i = 0; i < trainImagesStrVec.size(); ++i)
+    if (trainImagesStr != "none")
     {
-        Mat curImage = imread(trainImagesStrVec[i]);
-        if (image.empty())
+        const vector<string> trainImagesStrVec = split_string(trainImagesStr, ':');
+        for (size_t i = 0; i < trainImagesStrVec.size(); ++i)
         {
-            cerr << "Can't open image " << trainImagesStrVec[i] << endl;
-            return -1;
+            Mat curImage = imread(trainImagesStrVec[i]);
+            if (image.empty())
+            {
+                cerr << "Can't open image " << trainImagesStrVec[i] << endl;
+                return -1;
+            }
+            trainImages.push_back(curImage);
         }
-        trainImages.push_back(curImage);
     }
 
-    Ptr<SingleImageSuperResolution> superRes = SingleImageSuperResolution::create(SR_EXAMPLE_BASED);
+    Ptr<SingleImageSuperResolution> superRes = SingleImageSuperResolution::create(SINGLE_SR_EXAMPLE_BASED);
     Mat highResImage;
 
     superRes->set("scale", scale);
