@@ -26,6 +26,7 @@
 #include "exampled_based.hpp"
 #include <cstring>
 #include <cmath>
+#include <fstream>
 #include <opencv2/core/internal.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "extract_patch.hpp"
@@ -47,10 +48,10 @@ CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
                   obj.info()->addParam<DescriptorMatcher>(obj, "matcher", obj.matcher, false, 0, 0,
                                                           "Matching algorithm."));
 
-Ptr<SuperResolution> ExampledBased::create()
+Ptr<SingleImageSuperResolution> ExampledBased::create()
 {
     CV_DbgAssert( !ExampledBased_info_auto.name().empty() );
-    return Ptr<SuperResolution>(new ExampledBased);
+    return Ptr<SingleImageSuperResolution>(new ExampledBased);
 }
 
 ExampledBased::ExampledBased()
@@ -141,6 +142,10 @@ void ExampledBased::process(const Mat& src, Mat& dst)
 
     if (lowResPatches.empty())
         return;
+
+    CV_DbgAssert(lowResPatches.rows == highResPatches.rows);
+    CV_DbgAssert(lowResPatches.cols == (lowResPatchSize * lowResPatchSize + 2 * highResPatchSize - 1) * cn);
+    CV_DbgAssert(highResPatches.cols == highResPatchSize * highResPatchSize * cn);
 
     Mat lowRes = src;
     Mat highRes = dst;
@@ -297,4 +302,37 @@ void ExampledBased::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Mat&
         lowResPatches = lowResPatches.rowRange(0, patchNum);
         highResPatches = highResPatches.rowRange(0, patchNum);
     }
+}
+
+void ExampledBased::save(const string& fileName) const
+{
+    CV_DbgAssert(!empty());
+
+    FileStorage fs(fileName, FileStorage::WRITE);
+
+    cv::write(fs, "lowResPatchSize", lowResPatchSize);
+    cv::write(fs, "highResPatchSize", highResPatchSize);
+
+    cv::write(fs, "lowResPatches", lowResPatches);
+    cv::write(fs, "highResPatches", highResPatches);
+}
+
+void ExampledBased::load(const string& fileName)
+{
+    FileStorage fs(fileName, FileStorage::READ);
+
+    cv::read(fs["lowResPatchSize"], lowResPatchSize, 0);
+    cv::read(fs["highResPatchSize"], highResPatchSize, 0);
+
+    cv::read(fs["lowResPatches"], lowResPatches);
+    cv::read(fs["highResPatches"], highResPatches);
+
+    CV_DbgAssert(lowResPatches.rows == highResPatches.rows);
+    CV_DbgAssert(lowResPatches.cols == (lowResPatchSize * lowResPatchSize + 2 * highResPatchSize - 1) * cn);
+    CV_DbgAssert(highResPatches.cols == highResPatchSize * highResPatchSize * cn);
+}
+
+bool ExampledBased::empty() const
+{
+    return lowResPatches.empty();
 }

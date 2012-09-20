@@ -28,34 +28,39 @@
 #ifndef __SUPER_RESOLUTION_HPP__
 #define __SUPER_RESOLUTION_HPP__
 
+#include <string>
 #include <vector>
 #include <opencv2/core/core.hpp>
 #include "super_resolution_export.h"
 
-class SUPER_RESOLUTION_EXPORT SuperResolution : public cv::Algorithm
+enum Method
+{
+    SR_EXAMPLE_BASED,
+    SR_METHOD_MAX
+};
+
+class SUPER_RESOLUTION_EXPORT SingleImageSuperResolution : public cv::Algorithm
 {
 public:
-    enum Method
-    {
-        EXAMPLE_BASED,
-        METHOD_MAX
-    };
+    static cv::Ptr<SingleImageSuperResolution> create(Method method);
 
-    static cv::Ptr<SuperResolution> create(Method method);
-
-    virtual ~SuperResolution();
+    virtual ~SingleImageSuperResolution();
 
     virtual void train(const std::vector<cv::Mat>& images) = 0;
     virtual void train(const cv::Mat& image);
     template <class Iter> void train(Iter begin, Iter end);
 
+    virtual void save(const std::string& fileName) const = 0;
+    virtual void load(const std::string& fileName) = 0;
+
+    virtual bool empty() const = 0;
     virtual void clear() = 0;
 
     virtual void process(const cv::Mat& src, cv::Mat& dst) = 0;
 };
 
 template <class Iter>
-void SuperResolution::train(Iter begin, Iter end)
+void SingleImageSuperResolution::train(Iter begin, Iter end)
 {
     std::vector<cv::Mat> images(begin, end);
     train(images);

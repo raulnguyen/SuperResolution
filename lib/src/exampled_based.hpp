@@ -32,10 +32,10 @@
 #include "super_resolution.hpp"
 
 // W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution. Comp. Graph. Appl., (2), 2002
-class ExampledBased : public SuperResolution
+class ExampledBased : public SingleImageSuperResolution
 {
 public:
-    static cv::Ptr<SuperResolution> create();
+    static cv::Ptr<SingleImageSuperResolution> create();
 
     cv::AlgorithmInfo* info() const;
 
@@ -44,6 +44,10 @@ public:
     void train(const std::vector<cv::Mat>& images);
     void train(const cv::Mat& image);
 
+    void save(const std::string& fileName) const;
+    void load(const std::string& fileName);
+
+    bool empty() const;
     void clear();
 
     void process(const cv::Mat& src, cv::Mat& dst);

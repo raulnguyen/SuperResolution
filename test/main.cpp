@@ -25,6 +25,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -45,48 +46,92 @@ using namespace cv;
         cout << msg << " Time : " << tm.getTimeMilli() << " ms" << endl; \
     }
 
+namespace
+{
+    vector<string> split_string(const string& _str, char symbol)
+    {
+        string str = _str;
+        string word;
+        vector<string> vec;
+
+        while (!str.empty())
+        {
+            if (str[0] == symbol)
+            {
+                if (!word.empty())
+                {
+                    vec.push_back(word);
+                    word = "";
+                }
+            }
+            else
+            {
+                word += str[0];
+            }
+            str = str.substr(1, str.length() - 1);
+        }
+
+        if (!word.empty())
+        {
+            vec.push_back(word);
+        }
+
+        return vec;
+    }
+}
+
 int main(int argc, const char* argv[])
 {
-    if (argc < 2)
+    CommandLineParser cmd(argc, argv,
+        "{ image i | boy.png | Input image }"
+        "{ scale s | 2       | Scale factor }"
+        "{ train t |         | Train images (separated by :) }"
+    );
+
+    const string imageFileName = cmd.get<string>("image");
+    const double scale = cmd.get<double>("scale");
+
+    Mat image = imread(imageFileName);
+    if (image.empty())
     {
-        cerr << "Missing image file name" << endl;
+        cerr << "Can't open image " << imageFileName << endl;
         return -1;
     }
 
-    Mat goldImage = imread(argv[1]);
-    if (goldImage.empty())
+    vector<Mat> trainImages;
+    const string trainImagesStr = cmd.get<string>("train");
+    const vector<string> trainImagesStrVec = split_string(trainImagesStr, ':');
+    for (size_t i = 0; i < trainImagesStrVec.size(); ++i)
     {
-        cerr << "Can't open image " << argv[1] << endl;
-        return -1;
+        Mat curImage = imread(trainImagesStrVec[i]);
+        if (image.empty())
+        {
+            cerr << "Can't open image " << trainImagesStrVec[i] << endl;
+            return -1;
+        }
+        trainImages.push_back(curImage);
     }
 
-    const double scale = 2.0;
-
-    Mat lowResImage;
-    resize(goldImage, lowResImage, Size(), 1.0 / scale, 1.0 / scale);
-
-    Ptr<SuperResolution> superRes = SuperResolution::create(SuperResolution::EXAMPLE_BASED);
+    Ptr<SingleImageSuperResolution> superRes = SingleImageSuperResolution::create(SR_EXAMPLE_BASED);
     Mat highResImage;
 
     superRes->set("scale", scale);
 
-    MEASURE_TIME(superRes->train(goldImage), "Train");
-    MEASURE_TIME(superRes->process(lowResImage, highResImage), "Process");
+    if (!trainImages.empty())
+    {
+        MEASURE_TIME(superRes->train(trainImages), "Train");
+    }
 
-    Mat diff;
-    absdiff(goldImage, highResImage, diff);
+    MEASURE_TIME(superRes->process(image, highResImage), "Process");
 
     Mat bicubic;
-    resize(lowResImage, bicubic, Size(), 2, 2, INTER_CUBIC);
+    resize(image, bicubic, Size(), scale, scale, INTER_CUBIC);
 
-    namedWindow("Gold Image", WINDOW_NORMAL);
-    imshow("Gold Image", goldImage);
+    namedWindow("Input Image", WINDOW_NORMAL);
+    imshow("Input Image", image);
 
     namedWindow("Super Resolution", WINDOW_NORMAL);
     imshow("Super Resolution", highResImage);
-
-    namedWindow("Diff", WINDOW_NORMAL);
-    imshow("Diff", diff);
 
     namedWindow("Bi-Cubic Interpolation", WINDOW_NORMAL);
     imshow("Bi-Cubic Interpolation", bicubic);

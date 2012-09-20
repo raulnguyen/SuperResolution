@@ -29,24 +29,24 @@
 using namespace std;
 using namespace cv;
 
-Ptr<SuperResolution> SuperResolution::create(Method method)
+Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(Method method)
 {
-    typedef Ptr<SuperResolution> (*func_t)();
+    typedef Ptr<SingleImageSuperResolution> (*func_t)();
     static const func_t funcs[] =
     {
         ExampledBased::create
     };
 
-    CV_Assert(method >= EXAMPLE_BASED && method < METHOD_MAX);
+    CV_DbgAssert(method >= SR_EXAMPLE_BASED && method < SR_METHOD_MAX);
 
     return funcs[method]();
 }
 
-SuperResolution::~SuperResolution()
+SingleImageSuperResolution::~SingleImageSuperResolution()
 {
 }
 
-void SuperResolution::train(const Mat& image)
+void SingleImageSuperResolution::train(const Mat& image)
 {
     vector<Mat> images(1);
     images[0] = image;
