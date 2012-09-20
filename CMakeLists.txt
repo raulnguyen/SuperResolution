@@ -28,10 +28,6 @@ set(PROJECT_COPYRIGHT_YEAR "2012")
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
 option(BUILD_SAMPLE_APPS "Build sample applications" OFF)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
-endif()
-
 set(BIN_INSTALL_DIR "bin")
 set(LIB_INSTALL_DIR "lib")
 set(INCLUDE_INSTALL_DIR "include")    
