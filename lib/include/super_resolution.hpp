@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 #include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include "super_resolution_export.h"
 
 enum SingleSRMethod
@@ -65,5 +66,21 @@ void SingleImageSuperResolution::train(Iter begin, Iter end)
     std::vector<cv::Mat> images(begin, end);
     train(images);
 }
+
+enum VideoSRMethod
+{
+    VIDEO_SR_NLM_BASED,
+    VIDEO_SR_METHOD_MAX
+};
+
+class SUPER_RESOLUTION_EXPORT VideoSuperResolution
+{
+public:
+    static cv::Ptr<VideoSuperResolution> create(VideoSRMethod method);
+
+    virtual ~VideoSuperResolution();
+
+    virtual void process(cv::VideoCapture& cap, cv::Mat& dst) = 0;
+};
 
 #endif // __SUPER_RESOLUTION_HPP__

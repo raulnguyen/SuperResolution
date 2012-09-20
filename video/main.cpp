@@ -23,50 +23,50 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <iostream>
+#include <string>
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/contrib/contrib.hpp>
+
 #include "super_resolution.hpp"
-#include "exampled_based.hpp"
-#include "nlm_based.hpp"
 
 using namespace std;
 using namespace cv;
 
-Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(SingleSRMethod method)
+#define MEASURE_TIME(op, msg) \
+    { \
+        TickMeter tm; \
+        tm.start(); \
+        op; \
+        tm.stop(); \
+        cout << msg << " Time : " << tm.getTimeSec() << " s" << endl; \
+    }
+
+int main(int argc, const char* argv[])
 {
-    typedef Ptr<SingleImageSuperResolution> (*func_t)();
-    static const func_t funcs[] =
+    CommandLineParser cmd(argc, argv,
+        "{ video v | small.avi | Input video }");
+
+    const string inputVideoName = cmd.get<string>("video");
+
+    VideoCapture cap(inputVideoName);
+    if (!cap.isOpened())
     {
-        ExampledBased::create
-    };
+        cerr << "Can't open video " << inputVideoName << endl;
+        return -1;
+    }
 
-    CV_DbgAssert(method >= SINGLE_SR_EXAMPLE_BASED && method < SINGLE_SR_METHOD_MAX);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM_BASED);
 
-    return funcs[method]();
-}
+    Mat dst;
+    MEASURE_TIME(superRes->process(cap, dst), "Process");
 
-SingleImageSuperResolution::~SingleImageSuperResolution()
-{
-}
+    namedWindow("dst", WINDOW_NORMAL);
+    imshow("dst", dst);
+    waitKey();
 
-void SingleImageSuperResolution::train(const Mat& image)
-{
-    vector<Mat> images(1);
-    images[0] = image;
-    train(images);
-}
-
-Ptr<VideoSuperResolution> VideoSuperResolution::create(VideoSRMethod method)
-{
-    typedef Ptr<VideoSuperResolution> (*func_t)();
-    static const func_t funcs[] =
-    {
-        NlmBased::create
-    };
-
-    CV_DbgAssert(method >= VIDEO_SR_NLM_BASED && method < VIDEO_SR_METHOD_MAX);
-
-    return funcs[method]();
-}
-
-VideoSuperResolution::~VideoSuperResolution()
-{
+    return 0;
 }

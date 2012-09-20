@@ -23,50 +23,30 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#pragma once
+
+#ifndef __NLM_BASED_HPP__
+#define __NLM_BASED_HPP__
+
 #include "super_resolution.hpp"
-#include "exampled_based.hpp"
-#include "nlm_based.hpp"
 
-using namespace std;
-using namespace cv;
-
-Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(SingleSRMethod method)
+// M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
+class NlmBased : public VideoSuperResolution
 {
-    typedef Ptr<SingleImageSuperResolution> (*func_t)();
-    static const func_t funcs[] =
-    {
-        ExampledBased::create
-    };
+public:
+    static cv::Ptr<VideoSuperResolution> create();
 
-    CV_DbgAssert(method >= SINGLE_SR_EXAMPLE_BASED && method < SINGLE_SR_METHOD_MAX);
+    NlmBased();
 
-    return funcs[method]();
-}
+    void process(cv::VideoCapture& cap, cv::Mat& dst);
 
-SingleImageSuperResolution::~SingleImageSuperResolution()
-{
-}
+private:
+    int scale;
+    int searchAreaSize;
+    int timeAreaSize;
+    int timeStep;
+    int lowResPatchSize;
+    double sigma;
+};
 
-void SingleImageSuperResolution::train(const Mat& image)
-{
-    vector<Mat> images(1);
-    images[0] = image;
-    train(images);
-}
-
-Ptr<VideoSuperResolution> VideoSuperResolution::create(VideoSRMethod method)
-{
-    typedef Ptr<VideoSuperResolution> (*func_t)();
-    static const func_t funcs[] =
-    {
-        NlmBased::create
-    };
-
-    CV_DbgAssert(method >= VIDEO_SR_NLM_BASED && method < VIDEO_SR_METHOD_MAX);
-
-    return funcs[method]();
-}
-
-VideoSuperResolution::~VideoSuperResolution()
-{
-}
+#endif // __NLM_BASED_HPP__
