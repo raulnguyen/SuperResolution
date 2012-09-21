@@ -62,8 +62,9 @@ int main(int argc, const char* argv[])
 
     superRes->setFrameSource(frameSource);
 
-    namedWindow("Result", WINDOW_NORMAL);
-    for (;;)
+    VideoWriter writer;
+
+    for (int i = 0; i < 100; ++i)
     {
         Mat result;
         MEASURE_TIME(result = superRes->nextFrame(), "Process");
@@ -71,9 +72,17 @@ int main(int argc, const char* argv[])
         if (result.empty())
             break;
 
-        imshow("Result", result);
-        if (waitKey(30) > 0)
-            break;
+        if (i == 0)
+        {
+            writer.open("output.avi", CV_FOURCC('X', 'V', 'I', 'D'), 25, result.size());
+            if (!writer.isOpened())
+            {
+                cerr << "Can't open Video Writer" << endl;
+                return -1;
+            }
+        }
+
+        writer << result;
     }
 
     return 0;
