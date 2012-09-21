@@ -41,6 +41,9 @@ bool cv::superres::initModule_superres()
     return all;
 }
 
+////////////////////////////////////////////////////
+// ImageSuperResolution
+
 Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMethod method)
 {
     typedef Ptr<ImageSuperResolution> (*func_t)();
@@ -65,6 +68,9 @@ void cv::superres::ImageSuperResolution::train(const Mat& image)
     train(images);
 }
 
+////////////////////////////////////////////////////
+// VideoSuperResolution
+
 Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMethod method)
 {
     typedef Ptr<VideoSuperResolution> (*func_t)();
@@ -80,4 +86,39 @@ Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMeth
 
 cv::superres::VideoSuperResolution::~VideoSuperResolution()
 {
+}
+
+cv::superres::VideoSuperResolution::VideoSuperResolution()
+{
+    firstCall = true;
+    log = Ptr<ILog>(new LogToStdout());
+    frameSource = Ptr<IFrameSource>(new NullFrameSource());
+}
+
+void cv::superres::VideoSuperResolution::setFrameSource(const Ptr<IFrameSource>& frameSource)
+{
+    this->frameSource = frameSource;
+    reset();
+}
+
+Mat cv::superres::VideoSuperResolution::nextFrame()
+{
+    if (firstCall)
+    {
+        initImpl(frameSource);
+        firstCall = false;
+    }
+
+    Mat frame = frameSource->nextFrame();
+
+    if (frame.empty())
+        return Mat();
+
+    return processImpl(frame);
+}
+
+void cv::superres::VideoSuperResolution::reset()
+{
+    firstCall = true;
+    resetImpl();
 }

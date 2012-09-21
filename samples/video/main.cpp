@@ -36,6 +36,7 @@
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
+using namespace cv::videostab;
 
 #define MEASURE_TIME(op, msg) \
     { \
@@ -53,21 +54,27 @@ int main(int argc, const char* argv[])
 
     const string inputVideoName = cmd.get<string>("video");
 
-    VideoCapture cap(inputVideoName);
-    if (!cap.isOpened())
-    {
-        cerr << "Can't open video " << inputVideoName << endl;
-        return -1;
-    }
-
     Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM_BASED);
 
-    Mat dst;
-    MEASURE_TIME(superRes->process(cap, dst), "Process");
+    Ptr<IFrameSource> frameSource(new VideoFileSource(inputVideoName));
+    for (int i = 0; i < 20; ++i)
+        frameSource->nextFrame();
 
-    namedWindow("dst", WINDOW_NORMAL);
-    imshow("dst", dst);
-    waitKey();
+    superRes->setFrameSource(frameSource);
+
+    namedWindow("Result", WINDOW_NORMAL);
+    for (;;)
+    {
+        Mat result;
+        MEASURE_TIME(result = superRes->nextFrame(), "Process");
+
+        if (result.empty())
+            break;
+
+        imshow("Result", result);
+        if (waitKey(30) > 0)
+            break;
+    }
 
     return 0;
 }

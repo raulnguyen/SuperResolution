@@ -29,27 +29,46 @@
 #define __VIDEO_SUPER_RESOLUTION_HPP__
 
 #include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/videostab/videostab.hpp>
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
+        using namespace videostab;
+
         enum VideoSRMethod
         {
             VIDEO_SR_NLM_BASED,
             VIDEO_SR_METHOD_MAX
         };
 
-        class SUPER_RESOLUTION_EXPORT VideoSuperResolution
+        class SUPER_RESOLUTION_EXPORT VideoSuperResolution : public Algorithm, public IFrameSource
         {
         public:
             static Ptr<VideoSuperResolution> create(VideoSRMethod method);
 
             virtual ~VideoSuperResolution();
 
-            virtual void process(VideoCapture& cap, Mat& dst) = 0;
+            void setFrameSource(const Ptr<IFrameSource>& frameSource);
+            void setLog(const Ptr<ILog>& log) { this->log = log; }
+
+            void reset();
+            Mat nextFrame();
+
+        protected:
+            VideoSuperResolution();
+
+            virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
+            virtual Mat processImpl(const Mat& frame) = 0;
+            virtual void resetImpl() = 0;
+
+            Ptr<ILog> log;
+
+        private:
+            Ptr<IFrameSource> frameSource;
+            bool firstCall;
         };
     }
 }

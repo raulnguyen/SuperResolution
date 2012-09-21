@@ -35,7 +35,7 @@ using namespace std;
 using namespace cv;
 using namespace cv::superres;
 
-CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
+CV_INIT_ALGORITHM(ExampledBased, "ImageSuperResolution.ExampledBased",
                   obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                        "Scale factor.");
                   obj.info()->addParam(obj, "patchStep", obj.patchStep, false, 0, 0,

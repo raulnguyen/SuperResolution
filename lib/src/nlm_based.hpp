@@ -28,6 +28,7 @@
 #ifndef __NLM_BASED_HPP__
 #define __NLM_BASED_HPP__
 
+#include <vector>
 #include "video_super_resolution.hpp"
 #include "super_resolution_export.h"
 
@@ -38,17 +39,44 @@ public:
     static bool init();
     static cv::Ptr<VideoSuperResolution> create();
 
+    cv::AlgorithmInfo* info() const;
+
     NlmBased();
 
-    void process(cv::VideoCapture& cap, cv::Mat& dst);
+protected:
+    void initImpl(cv::Ptr<IFrameSource>& frameSource);
+    cv::Mat processImpl(const cv::Mat& frame);
+    void resetImpl();
 
 private:
+    void addNewFrame(const cv::Mat& frame, bool init = false);
+
     int scale;
-    int searchAreaSize;
-    int timeAreaSize;
-    int timeStep;
+    int searchAreaRadius;
+    int timeRadius;
     int lowResPatchSize;
     double sigma;
+    bool doDeblurring;
+
+    int curPos;
+    int curOutPos;
+
+    std::vector<cv::Mat> y; // input set of low resolution and noisy images
+    std::vector<cv::Mat> Y; // An initial estimate of the super-resolved sequence.
+
+    cv::Mat_<cv::Point3d> V;
+    cv::Mat_<cv::Point3d> W;
+
+    std::vector<double> patch1;
+    std::vector<double> patch2;
+
+    cv::Mat Z;
+    cv::Mat dst;
+
+    std::vector<cv::Mat> motions;
+    std::vector<float> blurrinessRates;
+    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
+    cv::Ptr<cv::videostab::DeblurerBase> deblurer;
 };
 
 #endif // __NLM_BASED_HPP__
