@@ -87,10 +87,19 @@ int main(int argc, const char* argv[])
         "{ image i | boy.png | Input image }"
         "{ scale s | 2       | Scale factor }"
         "{ train t | none    | Train images (separated by :) }"
+        "{ help h  |         | Print help message }"
     );
+
+    if (cmd.has("help"))
+    {
+        cmd.about("This sample demonstrates Super Resolution algorithms for single image");
+        cmd.printMessage();
+        return 0;
+    }
 
     const string imageFileName = cmd.get<string>("image");
     const double scale = cmd.get<double>("scale");
+    const string trainImagesStr = cmd.get<string>("train");
 
     Mat image = imread(imageFileName);
     if (image.empty())
@@ -100,7 +109,6 @@ int main(int argc, const char* argv[])
     }
 
     vector<Mat> trainImages;
-    const string trainImagesStr = cmd.get<string>("train");
     if (trainImagesStr != "none")
     {
         const vector<string> trainImagesStrVec = split_string(trainImagesStr, ':');
