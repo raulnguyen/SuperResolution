@@ -30,12 +30,13 @@
 
 #include "image_super_resolution.hpp"
 #include "video_super_resolution.hpp"
+#include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        bool initModule_superres();
+        SUPER_RESOLUTION_EXPORT bool initModule_superres();
     }
 }
 
