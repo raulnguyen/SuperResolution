@@ -52,7 +52,6 @@ namespace cv
             virtual ~VideoSuperResolution();
 
             void setFrameSource(const Ptr<IFrameSource>& frameSource);
-            void setLog(const Ptr<ILog>& log) { this->log = log; }
 
             void reset();
             Mat nextFrame();
@@ -63,8 +62,6 @@ namespace cv
             virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
             virtual Mat processImpl(const Mat& frame) = 0;
             virtual void resetImpl() = 0;
-
-            Ptr<ILog> log;
 
         private:
             Ptr<IFrameSource> frameSource;

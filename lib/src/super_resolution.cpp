@@ -91,7 +91,6 @@ cv::superres::VideoSuperResolution::~VideoSuperResolution()
 cv::superres::VideoSuperResolution::VideoSuperResolution()
 {
     firstCall = true;
-    log = Ptr<ILog>(new LogToStdout());
     frameSource = Ptr<IFrameSource>(new NullFrameSource());
 }
 

@@ -106,8 +106,6 @@ Mat NlmBased::processImpl(const Mat& frame)
 
     for (int k = 0; k < V.rows; ++k)
     {
-        log->print("Process : %.3f%%\n", static_cast<double>(k) / V.rows * 100);
-
         for (int l = 0; l < V.cols; ++l)
         {
             for (int t = -timeRadius; t <= timeRadius; ++t)
