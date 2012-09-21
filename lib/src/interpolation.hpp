@@ -30,10 +30,12 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include "super_resolution_export.h"
 
 namespace detail
 {
-    template <typename T, typename D> T readVal(const cv::Mat& src, int y, int x, int c, int borderMode, cv::Scalar borderVal)
+    template <typename T, typename D>
+    SUPER_RESOLUTION_NO_EXPORT T readVal(const cv::Mat& src, int y, int x, int c, int borderMode, cv::Scalar borderVal)
     {
         if (borderMode == cv::BORDER_CONSTANT)
             return (y >= 0 && y < src.rows && x >= 0 && x < src.cols) ? cv::saturate_cast<D>(src.at<T>(y, x * src.channels() + c)) : cv::saturate_cast<D>(borderVal.val[c]);
@@ -42,7 +44,8 @@ namespace detail
     }
 }
 
-template <typename T, typename D> struct NearestInterpolator
+template <typename T, typename D>
+struct SUPER_RESOLUTION_NO_EXPORT NearestInterpolator
 {
     static D getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {
@@ -50,7 +53,8 @@ template <typename T, typename D> struct NearestInterpolator
     }
 };
 
-template <typename T, typename D> struct LinearInterpolator
+template <typename T, typename D>
+struct SUPER_RESOLUTION_NO_EXPORT LinearInterpolator
 {
     static T getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {
@@ -70,7 +74,8 @@ template <typename T, typename D> struct LinearInterpolator
     }
 };
 
-template <typename T, typename D> struct CubicInterpolator
+template <typename T, typename D>
+struct SUPER_RESOLUTION_NO_EXPORT CubicInterpolator
 {
     static T getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {

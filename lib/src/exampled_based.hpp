@@ -29,13 +29,15 @@
 #define __EXAMPLED_BASED_HPP__
 
 #include <opencv2/features2d/features2d.hpp>
-#include "super_resolution.hpp"
+#include "image_super_resolution.hpp"
+#include "super_resolution_export.h"
 
 // W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
-class ExampledBased : public SingleImageSuperResolution
+class SUPER_RESOLUTION_NO_EXPORT ExampledBased : public cv::superres::ImageSuperResolution
 {
 public:
-    static cv::Ptr<SingleImageSuperResolution> create();
+    static bool init();
+    static cv::Ptr<ImageSuperResolution> create();
 
     cv::AlgorithmInfo* info() const;
 

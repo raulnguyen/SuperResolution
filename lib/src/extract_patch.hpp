@@ -31,11 +31,12 @@
 #include <vector>
 #include <opencv2/core/core.hpp>
 #include "interpolation.hpp"
+#include "super_resolution_export.h"
 
 namespace detail
 {
     template <typename T, typename D, template <typename, typename> class Interpolator>
-    void extractPatch(const cv::Mat& src, cv::Point2d p, std::vector<D>& patch, int patchSize)
+    SUPER_RESOLUTION_NO_EXPORT void extractPatch(const cv::Mat& src, cv::Point2d p, std::vector<D>& patch, int patchSize)
     {
         CV_DbgAssert(patchSize % 2 != 0);
 
@@ -58,7 +59,7 @@ namespace detail
 }
 
 template <typename T>
-void extractPatch(const cv::Mat& src, cv::Point2d p, std::vector<T>& patch, int patchSize, int interpolation = cv::INTER_NEAREST)
+SUPER_RESOLUTION_NO_EXPORT void extractPatch(const cv::Mat& src, cv::Point2d p, std::vector<T>& patch, int patchSize, int interpolation = cv::INTER_NEAREST)
 {
     typedef void (*func_t)(const cv::Mat& src, cv::Point2d p, std::vector<T>& patch, int patchSize);
     static const func_t funcs[7][3] =
@@ -81,7 +82,7 @@ void extractPatch(const cv::Mat& src, cv::Point2d p, std::vector<T>& patch, int 
 }
 
 template <typename T>
-void scalePatch(std::vector<T>& patch, int patchSize, int cn, cv::Scalar scale)
+SUPER_RESOLUTION_NO_EXPORT void scalePatch(std::vector<T>& patch, int patchSize, int cn, cv::Scalar scale)
 {
     CV_DbgAssert(patch.size() == patchSize * patchSize * cn);
 

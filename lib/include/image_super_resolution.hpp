@@ -25,30 +25,51 @@
 
 #pragma once
 
-#ifndef __NLM_BASED_HPP__
-#define __NLM_BASED_HPP__
+#ifndef __IMAGE_SUPER_RESOLUTION_HPP__
+#define __IMAGE_SUPER_RESOLUTION_HPP__
 
-#include "video_super_resolution.hpp"
+#include <string>
+#include <vector>
+#include <opencv2/core/core.hpp>
 #include "super_resolution_export.h"
 
-// M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
-class SUPER_RESOLUTION_NO_EXPORT NlmBased : public cv::superres::VideoSuperResolution
+namespace cv
 {
-public:
-    static bool init();
-    static cv::Ptr<VideoSuperResolution> create();
+    namespace superres
+    {
+        enum ImageSRMethod
+        {
+            IMAGE_SR_EXAMPLE_BASED,
+            IMAGE_SR_METHOD_MAX
+        };
 
-    NlmBased();
+        class SUPER_RESOLUTION_EXPORT ImageSuperResolution : public Algorithm
+        {
+        public:
+            static Ptr<ImageSuperResolution> create(ImageSRMethod method);
 
-    void process(cv::VideoCapture& cap, cv::Mat& dst);
+            virtual ~ImageSuperResolution();
 
-private:
-    int scale;
-    int searchAreaSize;
-    int timeAreaSize;
-    int timeStep;
-    int lowResPatchSize;
-    double sigma;
-};
+            virtual void train(const std::vector<Mat>& images) = 0;
+            virtual void train(const Mat& image);
+            template <class Iter> void train(Iter begin, Iter end);
 
-#endif // __NLM_BASED_HPP__
+            virtual void save(const std::string& fileName) const = 0;
+            virtual void load(const std::string& fileName) = 0;
+
+            virtual bool empty() const = 0;
+            virtual void clear() = 0;
+
+            virtual void process(const Mat& src, Mat& dst) = 0;
+        };
+
+        template <class Iter>
+        void ImageSuperResolution::train(Iter begin, Iter end)
+        {
+            std::vector<Mat> images(begin, end);
+            train(images);
+        }
+    }
+}
+
+#endif // __IMAGE_SUPER_RESOLUTION_HPP__

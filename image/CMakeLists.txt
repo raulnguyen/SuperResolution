@@ -1,11 +1,11 @@
 ########################################
 #
-# SuperResolution single image application
+# SuperResolution image application
 #
 # Vladislav Vinogradov (jet47)
 #
 
-set(TARGET_NAME "${PROJECT_BASE_NAME}_single_image")
+set(TARGET_NAME "${PROJECT_BASE_NAME}_image")
 
 file(GLOB HEADER_FILES "*.h" "*.hpp")
 file(GLOB SOURCE_FILES "*.c" "*.cpp")

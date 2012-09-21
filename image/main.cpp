@@ -32,10 +32,11 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/contrib/contrib.hpp>
 
-#include "super_resolution.hpp"
+#include "image_super_resolution.hpp"
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
 
 #define MEASURE_TIME(op, msg) \
     { \
@@ -115,7 +116,7 @@ int main(int argc, const char* argv[])
         }
     }
 
-    Ptr<SingleImageSuperResolution> superRes = SingleImageSuperResolution::create(SINGLE_SR_EXAMPLE_BASED);
+    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_EXAMPLE_BASED);
     Mat highResImage;
 
     superRes->set("scale", scale);

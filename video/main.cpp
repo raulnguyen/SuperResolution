@@ -31,10 +31,11 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/contrib/contrib.hpp>
 
-#include "super_resolution.hpp"
+#include "video_super_resolution.hpp"
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
 
 #define MEASURE_TIME(op, msg) \
     { \

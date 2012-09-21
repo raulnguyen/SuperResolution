@@ -25,30 +25,33 @@
 
 #pragma once
 
-#ifndef __NLM_BASED_HPP__
-#define __NLM_BASED_HPP__
+#ifndef __VIDEO_SUPER_RESOLUTION_HPP__
+#define __VIDEO_SUPER_RESOLUTION_HPP__
 
-#include "video_super_resolution.hpp"
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include "super_resolution_export.h"
 
-// M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
-class SUPER_RESOLUTION_NO_EXPORT NlmBased : public cv::superres::VideoSuperResolution
+namespace cv
 {
-public:
-    static bool init();
-    static cv::Ptr<VideoSuperResolution> create();
+    namespace superres
+    {
+        enum VideoSRMethod
+        {
+            VIDEO_SR_NLM_BASED,
+            VIDEO_SR_METHOD_MAX
+        };
 
-    NlmBased();
+        class SUPER_RESOLUTION_EXPORT VideoSuperResolution
+        {
+        public:
+            static Ptr<VideoSuperResolution> create(VideoSRMethod method);
 
-    void process(cv::VideoCapture& cap, cv::Mat& dst);
+            virtual ~VideoSuperResolution();
 
-private:
-    int scale;
-    int searchAreaSize;
-    int timeAreaSize;
-    int timeStep;
-    int lowResPatchSize;
-    double sigma;
-};
+            virtual void process(VideoCapture& cap, Mat& dst) = 0;
+        };
+    }
+}
 
-#endif // __NLM_BASED_HPP__
+#endif // __VIDEO_SUPER_RESOLUTION_HPP__

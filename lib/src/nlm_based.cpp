@@ -4,6 +4,12 @@
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
+
+bool NlmBased::init()
+{
+    return true;
+}
 
 Ptr<VideoSuperResolution> NlmBased::create()
 {

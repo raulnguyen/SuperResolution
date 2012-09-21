@@ -51,7 +51,7 @@ include_directories("${CMAKE_BINARY_DIR}/lib")
 add_subdirectory(lib)
 	
 if(BUILD_SAMPLE_APPS)
-    add_subdirectory(single_image)
+    add_subdirectory(image)
     add_subdirectory(video)
 endif()
 

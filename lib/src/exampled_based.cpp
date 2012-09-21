@@ -33,6 +33,7 @@
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
 
 CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
                   obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
@@ -48,10 +49,14 @@ CV_INIT_ALGORITHM(ExampledBased, "SuperResolution.ExampledBased",
                   obj.info()->addParam<DescriptorMatcher>(obj, "matcher", obj.matcher, false, 0, 0,
                                                           "Matching algorithm."));
 
-Ptr<SingleImageSuperResolution> ExampledBased::create()
+bool ExampledBased::init()
 {
-    CV_DbgAssert( !ExampledBased_info_auto.name().empty() );
-    return Ptr<SingleImageSuperResolution>(new ExampledBased);
+    return !ExampledBased_info_auto.name().empty();
+}
+
+Ptr<ImageSuperResolution> ExampledBased::create()
+{
+    return Ptr<ImageSuperResolution>(new ExampledBased);
 }
 
 ExampledBased::ExampledBased()

@@ -28,59 +28,15 @@
 #ifndef __SUPER_RESOLUTION_HPP__
 #define __SUPER_RESOLUTION_HPP__
 
-#include <string>
-#include <vector>
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include "super_resolution_export.h"
+#include "image_super_resolution.hpp"
+#include "video_super_resolution.hpp"
 
-enum SingleSRMethod
+namespace cv
 {
-    SINGLE_SR_EXAMPLE_BASED,
-    SINGLE_SR_METHOD_MAX
-};
-
-class SUPER_RESOLUTION_EXPORT SingleImageSuperResolution : public cv::Algorithm
-{
-public:
-    static cv::Ptr<SingleImageSuperResolution> create(SingleSRMethod method);
-
-    virtual ~SingleImageSuperResolution();
-
-    virtual void train(const std::vector<cv::Mat>& images) = 0;
-    virtual void train(const cv::Mat& image);
-    template <class Iter> void train(Iter begin, Iter end);
-
-    virtual void save(const std::string& fileName) const = 0;
-    virtual void load(const std::string& fileName) = 0;
-
-    virtual bool empty() const = 0;
-    virtual void clear() = 0;
-
-    virtual void process(const cv::Mat& src, cv::Mat& dst) = 0;
-};
-
-template <class Iter>
-void SingleImageSuperResolution::train(Iter begin, Iter end)
-{
-    std::vector<cv::Mat> images(begin, end);
-    train(images);
+    namespace superres
+    {
+        bool initModule_superres();
+    }
 }
-
-enum VideoSRMethod
-{
-    VIDEO_SR_NLM_BASED,
-    VIDEO_SR_METHOD_MAX
-};
-
-class SUPER_RESOLUTION_EXPORT VideoSuperResolution
-{
-public:
-    static cv::Ptr<VideoSuperResolution> create(VideoSRMethod method);
-
-    virtual ~VideoSuperResolution();
-
-    virtual void process(cv::VideoCapture& cap, cv::Mat& dst) = 0;
-};
 
 #endif // __SUPER_RESOLUTION_HPP__

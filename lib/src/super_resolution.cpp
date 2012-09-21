@@ -29,32 +29,43 @@
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
 
-Ptr<SingleImageSuperResolution> SingleImageSuperResolution::create(SingleSRMethod method)
+bool cv::superres::initModule_superres()
 {
-    typedef Ptr<SingleImageSuperResolution> (*func_t)();
+    bool all = true;
+
+    all &= ExampledBased::init();
+    all &= NlmBased::init();
+
+    return all;
+}
+
+Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMethod method)
+{
+    typedef Ptr<ImageSuperResolution> (*func_t)();
     static const func_t funcs[] =
     {
         ExampledBased::create
     };
 
-    CV_DbgAssert(method >= SINGLE_SR_EXAMPLE_BASED && method < SINGLE_SR_METHOD_MAX);
+    CV_DbgAssert(method >= IMAGE_SR_EXAMPLE_BASED && method < IMAGE_SR_METHOD_MAX);
 
     return funcs[method]();
 }
 
-SingleImageSuperResolution::~SingleImageSuperResolution()
+cv::superres::ImageSuperResolution::~ImageSuperResolution()
 {
 }
 
-void SingleImageSuperResolution::train(const Mat& image)
+void cv::superres::ImageSuperResolution::train(const Mat& image)
 {
     vector<Mat> images(1);
     images[0] = image;
     train(images);
 }
 
-Ptr<VideoSuperResolution> VideoSuperResolution::create(VideoSRMethod method)
+Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMethod method)
 {
     typedef Ptr<VideoSuperResolution> (*func_t)();
     static const func_t funcs[] =
@@ -67,6 +78,6 @@ Ptr<VideoSuperResolution> VideoSuperResolution::create(VideoSRMethod method)
     return funcs[method]();
 }
 
-VideoSuperResolution::~VideoSuperResolution()
+cv::superres::VideoSuperResolution::~VideoSuperResolution()
 {
 }
