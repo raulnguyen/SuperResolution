@@ -1,5 +1,6 @@
 #include "nlm_based.hpp"
 #include <opencv2/core/internal.hpp>
+#include "extract_patch.hpp"
 
 using namespace std;
 using namespace cv;
@@ -9,11 +10,11 @@ CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
                   obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                        "Scale factor.");
                   obj.info()->addParam(obj, "searchAreaRadius", obj.searchAreaRadius, false, 0, 0,
-                                       "Radius of the patch search area in low resolution image (-1 means whole image).");
+                                       "Radius of the patch search area in low resolution image.");
                   obj.info()->addParam(obj, "timeRadius", obj.timeRadius, false, 0, 0,
                                        "Radius of the time search area.");
-                  obj.info()->addParam(obj, "lowResPatchSize", obj.lowResPatchSize, false, 0, 0,
-                                       "Size of tha patch at in low resolution image.");
+                  obj.info()->addParam(obj, "patchSize", obj.patchSize, false, 0, 0,
+                                       "Size of tha patch at in high resolution image.");
                   obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
                                        "Weight of the patch difference"));
 
@@ -30,33 +31,13 @@ Ptr<VideoSuperResolution> NlmBased::create()
 NlmBased::NlmBased()
 {
     scale = 2;
-    searchAreaRadius = 5;
-    timeRadius = 1;
-    lowResPatchSize = 7;
+    searchAreaRadius = 10;
+    timeRadius = 2;
+    patchSize = 13;
     sigma = 7.5;
 }
 
-void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
-{
-    y.resize(2 * timeRadius + 1);
-    Y.resize(2 * timeRadius + 1);
-
-    curPos = -1;
-    curProcessedPos = curPos - timeRadius;
-    curOutPos = curProcessedPos - timeRadius;
-
-    for (int t = -timeRadius; t < timeRadius; ++t)
-    {
-        Mat frame = frameSource->nextFrame();
-
-        if (frame.empty())
-            return;
-
-        addNewFrame(frame);
-    }
-}
-
-#ifdef HAVE_TBB
+#if defined(NDEBUG) && defined(HAVE_TBB)
     typedef tbb::blocked_range<int> Range1D;
     typedef tbb::blocked_range2d<int> Range2D;
 
@@ -106,10 +87,10 @@ namespace
         int scale;
         int searchAreaRadius;
         int timeRadius;
-        int lowResPatchSize;
+        int patchSize;
         double sigma;
 
-        int curProcessedPos;
+        int procPos;
 
         vector<Mat>* y;
         vector<Mat>* Y;
@@ -120,74 +101,50 @@ namespace
 
     void LoopBody::operator ()(const Range2D& range) const
     {
-        const int s = scale;           // the desired scaling factor
-        const int q = lowResPatchSize; // the size of the low resolution patch
-        const int p = s * (q - 1) + 1; // the size of the high resolution patch
         const double weightScale = 1.0 / (2.0 * sigma * sigma);
 
-        const Mat& Z = at(curProcessedPos, *Y);
+        const Mat& Z = at(procPos, *Y);
 
-        const int kStart = max(range.rows().begin(), p/2);
-        const int kEnd = min(range.rows().end(), Z.rows - p/2);
-
-        const int lStart = max(range.cols().begin(), p/2);
-        const int lEnd = min(range.cols().end(), Z.cols - p/2);
-
-        for (int k = kStart; k < kEnd; ++k)
+        for (int k = range.rows().begin(); k < range.rows().end(); ++k)
         {
-            for (int l = lStart; l < lEnd; ++l)
+            for (int l = range.cols().begin(); l < range.cols().end(); ++l)
             {
-                const Mat_<Vec3b> Z_patch(p, p, const_cast<Vec3b*>(Z.ptr<Vec3b>(k - p/2) + l - p/2), Z.step);
+                const Mat_<Vec3b> Z_patch = extractPatch<Vec3b>(Z, Point(l, k), patchSize);
 
                 for (int t = -timeRadius; t <= timeRadius; ++t)
                 {
-                    const Mat& Yt = at(curProcessedPos + t, *Y);
-                    const Mat& yt = at(curProcessedPos + t, *y);
+                    const Mat& Yt = at(procPos + t, *Y);
+                    const Mat& yt = at(procPos + t, *y);
 
-                    int iStart, iEnd;
-                    int jStart, jEnd;
-
-                    if (searchAreaRadius > 0)
+                    for (int ii = -searchAreaRadius; ii <= searchAreaRadius; ++ii)
                     {
-                        iStart = k / s - searchAreaRadius;
-                        iEnd   = k / s + searchAreaRadius + 1;
-                        jStart = l / s - searchAreaRadius;
-                        jEnd   = l / s + searchAreaRadius + 1;
-                    }
-                    else
-                    {
-                        iStart = 0;
-                        iEnd   = y->front().rows;
-                        jStart = 0;
-                        jEnd   = y->front().cols;
-                    }
+                        const int i = k / scale + ii;
+                        const int I = i * scale;
 
-                    for (int i = iStart; i < iEnd; ++i)
-                    {
-                        if (s * i < p / 2 || s * i > Yt.rows)
-                            continue;
-
-                        for (int j = jStart; j < jEnd; ++j)
+                        for (int jj = -searchAreaRadius; jj <= searchAreaRadius; ++jj)
                         {
-                            if (s * j < p / 2 || s * j > Yt.cols)
-                                continue;
-
-                            const Mat_<Vec3b> Yt_patch(p, p, const_cast<Vec3b*>(Yt.ptr<Vec3b>(s * i - p/2) + s * j - p/2), Yt.step);
+                            const int j = l / scale + jj;
+                            const int J = j * scale;
 
                             double patchDiff = 0.0;
-                            for (int ii = 0; ii < p; ++ii)
+
+                            const Mat_<Vec3b> Yt_patch = extractPatch<Vec3b>(Yt, Point(J, I), patchSize);
+
+                            for (int y = 0; y < patchSize; ++y)
                             {
-                                for (int jj = 0; jj < p; ++jj)
+                                for (int x = 0; x < patchSize; ++x)
                                 {
-                                    Vec3b zVal = Z_patch(ii, jj);
+                                    Vec3b zVal = Z_patch(y, x);
                                     Point3d zVald(zVal[0], zVal[1], zVal[2]);
 
-                                    Vec3b YtVal = Yt_patch(ii, jj);
+                                    Vec3b YtVal = Yt_patch(y, x);
                                     Point3d YtVald(YtVal[0], YtVal[1], YtVal[2]);
 
                                     Point3d diff = zVald - YtVald;
 
-                                    patchDiff += diff.ddot(diff);
+                                    patchDiff += diff.x * diff.x;
+                                    patchDiff += diff.y * diff.y;
+                                    patchDiff += diff.z * diff.z;
                                 }
                             }
 
@@ -206,49 +163,92 @@ namespace
     }
 }
 
+void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
+{
+    y.resize(3 * timeRadius + 2);
+    Y.resize(3 * timeRadius + 2);
+
+    storePos = -1;
+    procPos = storePos - 2 * timeRadius;
+    outPos = procPos - timeRadius - 1;
+
+    for (int t = -timeRadius; t <= 2 * timeRadius; ++t)
+    {
+        Mat frame = frameSource->nextFrame();
+
+        CV_Assert(!frame.empty());
+
+        addNewFrame(frame);
+    }
+
+    processFrame(procPos);
+    for (int t = 1; t <= timeRadius; ++t)
+        processFrame(procPos + t);
+    processFrame(procPos);
+}
+
 Mat NlmBased::processImpl(const Mat& frame)
 {
     addNewFrame(frame);
 
-    Mat& curProcY = at(curProcessedPos, Y);
+    processFrame(procPos + timeRadius);
+    processFrame(procPos);
 
-    curProcY.convertTo(V, CV_64F);
+    return at(outPos, Y);
+}
+
+void NlmBased::processFrame(int idx)
+{
+    CV_Assert(patchSize > scale);
+
+    Mat& procY = at(idx, Y);
+
+    procY.convertTo(V, CV_64F);
     W.create(V.size());
     W.setTo(Scalar::all(1));
 
-    {
-        LoopBody body;
+    LoopBody body;
 
-        body.scale = scale;
-        body.searchAreaRadius = searchAreaRadius;
-        body.timeRadius = timeRadius;
-        body.lowResPatchSize = lowResPatchSize;
-        body.sigma = sigma;
+    body.scale = scale;
+    body.searchAreaRadius = searchAreaRadius;
+    body.timeRadius = timeRadius;
+    body.patchSize = patchSize;
+    body.sigma = sigma;
 
-        body.curProcessedPos = curProcessedPos;
+    body.procPos = idx;
 
-        body.y = &y;
-        body.Y = &Y;
+    body.y = &y;
+    body.Y = &Y;
 
-        body.V = V;
-        body.W = W;
+    body.V = V;
+    body.W = W;
 
-        loop2D(Range2D(0, V.rows, 0, V.cols), body);
-    }
+    loop2D(Range2D(0, V.rows, 0, V.cols), body);
 
     divide(V, W, Z);
 
-    Z.convertTo(curProcY, CV_8U);
+    Z.convertTo(procY, CV_8U);
+}
 
-    return at(curOutPos, Y);
+namespace
+{
+    Mat addBorder(const Mat& src, int brd)
+    {
+        Mat buf;
+        copyMakeBorder(src, buf, brd, brd, brd, brd, BORDER_CONSTANT);
+        return buf(Range(brd, buf.rows - brd), Range(brd, buf.cols - brd));
+    }
 }
 
 void NlmBased::addNewFrame(const cv::Mat& frame)
 {
-    ++curPos;
-    ++curProcessedPos;
-    ++curOutPos;
+    Mat highRes;
+    resize(frame, highRes, Size(), scale, scale, INTER_CUBIC);
 
-    frame.copyTo(at(curPos, y));
-    resize(frame, at(curPos, Y), Size(), scale, scale, INTER_CUBIC);
+    ++storePos;
+    ++procPos;
+    ++outPos;
+
+    at(storePos, y) = addBorder(frame, searchAreaRadius + 1);
+    at(storePos, Y) = addBorder(highRes, max(scale * (searchAreaRadius + 1), patchSize));
 }

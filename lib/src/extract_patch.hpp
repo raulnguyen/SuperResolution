@@ -91,4 +91,11 @@ SUPER_RESOLUTION_NO_EXPORT void scalePatch(std::vector<T>& patch, int patchSize,
             patch[ind] /= scale[c];
 }
 
+template <typename T>
+SUPER_RESOLUTION_NO_EXPORT cv::Mat_<T> extractPatch(const cv::Mat& src, cv::Point p, int patchSize)
+{
+    cv::Mat_<T> patch(patchSize, patchSize, const_cast<T*>(src.ptr<T>(p.y - patchSize / 2) + p.x - patchSize / 2), src.step);
+    return patch;
+}
+
 #endif // __EXTRACT_PATCH_HPP__

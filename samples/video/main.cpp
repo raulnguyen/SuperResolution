@@ -85,12 +85,9 @@ int main(int argc, const char* argv[])
     Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM_BASED);
 
     Ptr<IFrameSource> videoSource(new VideoFileSource(inputVideoName));
-    Ptr<IFrameSource> frameSouce(new ResizedSource(videoSource, 0.25));
-
     Ptr<IFrameSource> videoSource2(new VideoFileSource(inputVideoName));
-    Ptr<IFrameSource> frameSouce2(new ResizedSource(videoSource2, 0.25));
 
-    superRes->setFrameSource(frameSouce);
+    superRes->setFrameSource(videoSource);
     superRes->set("scale", scale);
 
     namedWindow("Result", WINDOW_NORMAL);
@@ -104,7 +101,7 @@ int main(int argc, const char* argv[])
         if (result.empty())
             break;
 
-        Mat frame = frameSouce2->nextFrame();
+        Mat frame = videoSource2->nextFrame();
         Mat bicubic;
         resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 

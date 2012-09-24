@@ -49,16 +49,17 @@ protected:
 
 private:
     void addNewFrame(const cv::Mat& frame);
+    void processFrame(int idx);
 
     int scale;
     int searchAreaRadius;
     int timeRadius;
-    int lowResPatchSize;
+    int patchSize;
     double sigma;
 
-    int curPos;
-    int curProcessedPos;
-    int curOutPos;
+    int storePos;
+    int procPos;
+    int outPos;
 
     std::vector<cv::Mat> y; // input set of low resolution and noisy images
     std::vector<cv::Mat> Y; // An initial estimate of the super-resolved sequence.
