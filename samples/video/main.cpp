@@ -47,24 +47,56 @@ using namespace cv::videostab;
         cout << msg << " Time : " << tm.getTimeSec() << " s" << endl; \
     }
 
+class ResizedSource : public IFrameSource
+{
+public:
+    ResizedSource(const Ptr<IFrameSource>& base, double scale) : base(base), scale(scale) {}
+
+    void reset();
+    Mat nextFrame();
+
+private:
+    Ptr<IFrameSource> base;
+    double scale;
+    Mat resized;
+};
+
+void ResizedSource::reset()
+{
+    base->reset();
+}
+
+Mat ResizedSource::nextFrame()
+{
+    Mat frame = base->nextFrame();
+    resize(frame, resized, Size(), scale, scale, INTER_AREA);
+    return resized;
+}
+
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ video v | small.avi | Input video }");
+        "{ video v | small.avi | Input video }"
+        "{ scale s | 2         | Scale factor }");
 
     const string inputVideoName = cmd.get<string>("video");
+    const int scale = cmd.get<int>("scale");
 
     Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM_BASED);
 
-    Ptr<IFrameSource> frameSource(new VideoFileSource(inputVideoName));
-    for (int i = 0; i < 20; ++i)
-        frameSource->nextFrame();
+    Ptr<IFrameSource> videoSource(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> frameSouce(new ResizedSource(videoSource, 0.25));
 
-    superRes->setFrameSource(frameSource);
+    Ptr<IFrameSource> videoSource2(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> frameSouce2(new ResizedSource(videoSource2, 0.25));
 
-    VideoWriter writer;
+    superRes->setFrameSource(frameSouce);
+    superRes->set("scale", scale);
 
-    for (int i = 0; i < 100; ++i)
+    namedWindow("Result", WINDOW_NORMAL);
+    namedWindow("BiCubic", WINDOW_NORMAL);
+
+    for (;;)
     {
         Mat result;
         MEASURE_TIME(result = superRes->nextFrame(), "Process");
@@ -72,17 +104,14 @@ int main(int argc, const char* argv[])
         if (result.empty())
             break;
 
-        if (i == 0)
-        {
-            writer.open("output.avi", CV_FOURCC('X', 'V', 'I', 'D'), 25, result.size());
-            if (!writer.isOpened())
-            {
-                cerr << "Can't open Video Writer" << endl;
-                return -1;
-            }
-        }
+        Mat frame = frameSouce2->nextFrame();
+        Mat bicubic;
+        resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 
-        writer << result;
+        imshow("Result", result);
+        imshow("BiCubic", bicubic);
+
+        waitKey();
     }
 
     return 0;

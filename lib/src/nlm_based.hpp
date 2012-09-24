@@ -49,16 +49,16 @@ protected:
     void resetImpl();
 
 private:
-    void addNewFrame(const cv::Mat& frame, bool init = false);
+    void addNewFrame(const cv::Mat& frame);
 
     int scale;
     int searchAreaRadius;
     int timeRadius;
     int lowResPatchSize;
     double sigma;
-    bool doDeblurring;
 
     int curPos;
+    int curProcessedPos;
     int curOutPos;
 
     std::vector<cv::Mat> y; // input set of low resolution and noisy images
@@ -71,12 +71,6 @@ private:
     std::vector<double> patch2;
 
     cv::Mat Z;
-    cv::Mat dst;
-
-    std::vector<cv::Mat> motions;
-    std::vector<float> blurrinessRates;
-    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
-    cv::Ptr<cv::videostab::DeblurerBase> deblurer;
 };
 
 #endif // __NLM_BASED_HPP__

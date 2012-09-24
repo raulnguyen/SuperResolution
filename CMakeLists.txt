@@ -9,6 +9,8 @@
 
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake")
+
 ########## Project properties ##########
 
 project(SuperResolution)
@@ -25,6 +27,7 @@ set(PROJECT_COPYRIGHT_YEAR "2012")
 
 ############ Build options #############
 
+option(BUILD_WITH_TBB "Build with TBB support" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
 option(BUILD_SAMPLE_APPS "Build sample applications" OFF)
 
@@ -35,6 +38,7 @@ set(DOC_INSTALL_DIR "share/doc/${PROJECT_NAME}")
 
 message(STATUS "Configuring ${PROJECT_NAME} in ${CMAKE_BUILD_TYPE} mode")
 message(STATUS "Build options :")
+message(STATUS "TBB support : ${BUILD_WITH_TBB}")
 message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
 message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
 
@@ -42,6 +46,12 @@ message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
 
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIR})
+
+if(BUILD_WITH_TBB)
+    find_package(TBB REQUIRED)
+    include_directories(${TBB_INCLUDE_DIRS})
+    link_directories(${TBB_LIBRARY_DIRS})
+endif()
 
 include_directories("${CMAKE_SOURCE_DIR}/lib/include")
 include_directories("${CMAKE_BINARY_DIR}/lib")
