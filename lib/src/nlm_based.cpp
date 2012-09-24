@@ -1,6 +1,5 @@
 #include "nlm_based.hpp"
 #include <opencv2/core/internal.hpp>
-#include "extract_patch.hpp"
 
 using namespace std;
 using namespace cv;
@@ -116,7 +115,6 @@ namespace
         int lowResPatchSize;
         double sigma;
 
-        int curPos;
         int curProcessedPos;
 
         vector<Mat>* y;
@@ -133,49 +131,78 @@ namespace
         const int p = s * (q - 1) + 1; // the size of the high resolution patch
         const double weightScale = 1.0 / (2.0 * sigma * sigma);
 
-        const Mat& curY = at(curProcessedPos, *Y);
+        const Mat& Z = at(curProcessedPos, *Y);
 
-        vector<double> patch1;
-        vector<double> patch2;
+        const int kStart = max(range.rows().begin(), p/2);
+        const int kEnd = min(range.rows().end(), Z.rows - p/2);
 
-        for (int k = range.rows().begin(); k < range.rows().end(); ++k)
+        const int lStart = max(range.cols().begin(), p/2);
+        const int lEnd = min(range.cols().end(), Z.cols - p/2);
+
+        for (int k = kStart; k < kEnd; ++k)
         {
-            for (int l = range.cols().begin(); l < range.cols().end(); ++l)
+            for (int l = lStart; l < kEnd; ++l)
             {
-                extractPatch(curY, Point2d(l, k), patch1, p, INTER_NEAREST);
+                const Mat_<Vec3b> Z_patch(p, p, const_cast<Vec3b*>(Z.ptr<Vec3b>(k - p/2) + l - p/2), Z.step);
 
                 for (int t = -timeRadius; t <= timeRadius; ++t)
                 {
                     const Mat& Yt = at(curProcessedPos + t, *Y);
                     const Mat& yt = at(curProcessedPos + t, *y);
 
-                    const int iStart = searchAreaRadius == -1 ? 0 : k / s - searchAreaRadius;
-                    const int iEnd = searchAreaRadius == -1 ? y->front().rows : k / s + searchAreaRadius + 1;
+                    int iStart, iEnd;
+                    int jStart, jEnd;
+
+                    if (searchAreaRadius > 0)
+                    {
+                        iStart = k / s - searchAreaRadius;
+                        iEnd   = k / s + searchAreaRadius + 1;
+                        jStart = l / s - searchAreaRadius;
+                        jEnd   = l / s + searchAreaRadius + 1;
+                    }
+                    else
+                    {
+                        iStart = 0;
+                        iEnd   = y->front().rows;
+                        jStart = 0;
+                        jEnd   = y->front().cols;
+                    }
 
                     for (int i = iStart; i < iEnd; ++i)
                     {
-                        const int jStart = searchAreaRadius == -1 ? 0 : l / s - searchAreaRadius;
-                        const int jEnd = searchAreaRadius == -1 ? y->front().cols : l / s + searchAreaRadius + 1;
+                        if (s * i < p / 2 || s * i > Yt.rows)
+                            continue;
 
                         for (int j = jStart; j < jEnd; ++j)
                         {
-                            extractPatch(Yt, Point2d(s * j, s * i), patch2, p, INTER_NEAREST);
+                            if (s * j < p / 2 || s * j > Yt.cols)
+                                continue;
 
-                            double norm2 = 0.0;
-                            for (size_t n = 0; n < patch1.size(); ++n)
+                            const Mat_<Vec3b> Yt_patch(p, p, const_cast<Vec3b*>(Yt.ptr<Vec3b>(s * i - p/2) + s * j - p/2), Yt.step);
+
+                            double patchDiff = 0.0;
+                            for (int ii = 0; ii < p; ++ii)
                             {
-                                const double diff = patch1[n] - patch2[n];
-                                norm2 += diff * diff;
+                                for (int jj = 0; jj < p; ++jj)
+                                {
+                                    Vec3b zVal = Z_patch(ii, jj);
+                                    Point3d zVald(zVal[0], zVal[1], zVal[2]);
+
+                                    Vec3b YtVal = Yt_patch(ii, jj);
+                                    Point3d YtVald(YtVal[0], YtVal[1], YtVal[2]);
+
+                                    Point3d diff = zVald - YtVald;
+
+                                    patchDiff += diff.ddot(diff);
+                                }
                             }
 
-                            const double w = exp(-norm2 * weightScale);
+                            const double w = exp(-patchDiff * weightScale);
 
-                            Point3d val;
-                            val.x = detail::readVal<uchar, double>(yt, i, j, 0, BORDER_REFLECT_101, Scalar());
-                            val.y = detail::readVal<uchar, double>(yt, i, j, 1, BORDER_REFLECT_101, Scalar());
-                            val.z = detail::readVal<uchar, double>(yt, i, j, 2, BORDER_REFLECT_101, Scalar());
+                            Vec3b val = yt.at<Vec3b>(i, j);
+                            Point3d vald(val[0], val[1], val[2]);
 
-                            V(k, l) += w * val;
+                            V(k, l) += w * vald;
                             W(k, l) += Point3d(w, w, w);
                         }
                     }
@@ -204,7 +231,6 @@ Mat NlmBased::processImpl(const Mat& frame)
         body.lowResPatchSize = lowResPatchSize;
         body.sigma = sigma;
 
-        body.curPos = curPos;
         body.curProcessedPos = curProcessedPos;
 
         body.y = &y;
