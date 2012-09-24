@@ -119,5 +119,4 @@ Mat cv::superres::VideoSuperResolution::nextFrame()
 void cv::superres::VideoSuperResolution::reset()
 {
     firstCall = true;
-    resetImpl();
 }

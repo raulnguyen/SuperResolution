@@ -61,7 +61,6 @@ namespace cv
 
             virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
             virtual Mat processImpl(const Mat& frame) = 0;
-            virtual void resetImpl() = 0;
 
         private:
             Ptr<IFrameSource> frameSource;

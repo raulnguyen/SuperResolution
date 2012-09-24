@@ -46,7 +46,6 @@ public:
 protected:
     void initImpl(cv::Ptr<IFrameSource>& frameSource);
     cv::Mat processImpl(const cv::Mat& frame);
-    void resetImpl();
 
 private:
     void addNewFrame(const cv::Mat& frame);

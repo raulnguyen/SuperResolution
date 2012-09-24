@@ -36,12 +36,6 @@ NlmBased::NlmBased()
     sigma = 7.5;
 }
 
-void NlmBased::resetImpl()
-{
-    Y.clear();
-    y.clear();
-}
-
 void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
 {
     y.resize(2 * timeRadius + 1);
@@ -141,7 +135,7 @@ namespace
 
         for (int k = kStart; k < kEnd; ++k)
         {
-            for (int l = lStart; l < kEnd; ++l)
+            for (int l = lStart; l < lEnd; ++l)
             {
                 const Mat_<Vec3b> Z_patch(p, p, const_cast<Vec3b*>(Z.ptr<Vec3b>(k - p/2) + l - p/2), Z.step);
 
