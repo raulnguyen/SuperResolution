@@ -62,6 +62,8 @@ NlmBased::NlmBased()
     sigma = 7.5;
 }
 
+namespace
+{
 #ifdef HAVE_TBB
     typedef tbb::blocked_range<int> Range1D;
     typedef tbb::blocked_range2d<int> Range2D;
@@ -103,8 +105,30 @@ NlmBased::NlmBased()
     }
 #endif
 
-namespace
-{
+    double calcNlmWeight(const Mat_<Vec3b>& patch1, Point2d, const Mat_<Vec3b>& patch2, Point2d, double patchDiffWeight)
+    {
+        CV_DbgAssert(patch1.size() == patch2.size());
+
+        double patchDiff = 0.0;
+        for (int y = 0; y < patch1.rows; ++y)
+        {
+            for (int x = 0; x < patch1.cols; ++x)
+            {
+                Vec3b val1 = patch1(y, x);
+                Vec3b val2 = patch2(y, x);
+
+                Point3d val1d(val1[0], val1[1], val1[2]);
+                Point3d val2d(val2[0], val2[1], val2[2]);
+
+                Point3d diff = val1d - val2d;
+
+                patchDiff += diff.ddot(diff);
+            }
+        }
+
+        return exp(-patchDiff * patchDiffWeight);
+    }
+
     struct LoopBody
     {
         void operator ()(const Range2D& range) const;
@@ -126,60 +150,41 @@ namespace
 
     void LoopBody::operator ()(const Range2D& range) const
     {
-        const double weightScale = 1.0 / (2.0 * sigma * sigma);
+        const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma);
 
         const Mat& Z = at(procPos, *Y);
 
-        for (int k = range.rows().begin(); k < range.rows().end(); ++k)
+        Point Z_loc;
+        for (Z_loc.y = range.rows().begin(); Z_loc.y < range.rows().end(); ++Z_loc.y)
         {
-            for (int l = range.cols().begin(); l < range.cols().end(); ++l)
+            for (Z_loc.x = range.cols().begin(); Z_loc.x < range.cols().end(); ++Z_loc.x)
             {
-                const Mat_<Vec3b> Z_patch = extractPatch<Vec3b>(Z, Point(l, k), patchSize);
+                const Mat_<Vec3b> Z_patch = extractPatch<Vec3b>(Z, Z_loc, patchSize);
 
                 for (int t = -timeRadius; t <= timeRadius; ++t)
                 {
                     const Mat& Yt = at(procPos + t, *Y);
                     const Mat& yt = at(procPos + t, *y);
 
-                    for (int ii = -searchAreaRadius; ii <= searchAreaRadius; ++ii)
+                    for (int i = -searchAreaRadius; i <= searchAreaRadius; ++i)
                     {
-                        const int i = k / scale + ii;
-                        const int I = i * scale;
-
-                        for (int jj = -searchAreaRadius; jj <= searchAreaRadius; ++jj)
+                        for (int j = -searchAreaRadius; j <= searchAreaRadius; ++j)
                         {
-                            const int j = l / scale + jj;
-                            const int J = j * scale;
+                            Point yt_loc(Z_loc.x / scale + j, Z_loc.y / scale + i);
+                            Point Yt_loc(yt_loc.x * scale, yt_loc.y * scale);
 
-                            double patchDiff = 0.0;
+                            const Mat_<Vec3b> Yt_patch = extractPatch<Vec3b>(Yt, Yt_loc, patchSize);
 
-                            const Mat_<Vec3b> Yt_patch = extractPatch<Vec3b>(Yt, Point(J, I), patchSize);
+                            const double w = calcNlmWeight(Z_patch, Z_loc, Yt_patch, Yt_loc, patchDiffWeight);
 
-                            for (int y = 0; y < patchSize; ++y)
+                            if (w >= 0.1)
                             {
-                                for (int x = 0; x < patchSize; ++x)
-                                {
-                                    Vec3b zVal = Z_patch(y, x);
-                                    Point3d zVald(zVal[0], zVal[1], zVal[2]);
+                                Vec3b val = yt.at<Vec3b>(yt_loc);
+                                Point3d vald(val[0], val[1], val[2]);
 
-                                    Vec3b YtVal = Yt_patch(y, x);
-                                    Point3d YtVald(YtVal[0], YtVal[1], YtVal[2]);
-
-                                    Point3d diff = zVald - YtVald;
-
-                                    patchDiff += diff.x * diff.x;
-                                    patchDiff += diff.y * diff.y;
-                                    patchDiff += diff.z * diff.z;
-                                }
+                                V(Z_loc) += w * vald;
+                                W(Z_loc) += Point3d(w, w, w);
                             }
-
-                            const double w = exp(-patchDiff * weightScale);
-
-                            Vec3b val = yt.at<Vec3b>(i, j);
-                            Point3d vald(val[0], val[1], val[2]);
-
-                            V(k, l) += w * vald;
-                            W(k, l) += Point3d(w, w, w);
                         }
                     }
                 }
@@ -224,8 +229,6 @@ Mat NlmBased::processImpl(const Mat& frame)
 
 void NlmBased::processFrame(int idx)
 {
-    CV_Assert(patchSize > scale);
-
     Mat& procY = at(idx, Y);
 
     procY.convertTo(V, CV_64F);
@@ -267,6 +270,12 @@ namespace
 
 void NlmBased::addNewFrame(const cv::Mat& frame)
 {
+    CV_DbgAssert(frame.type() == CV_8UC3);
+#ifdef _DEBUG
+    if (storePos >= 0)
+        CV_DbgAssert(frame.size() == at(storePos, y).size());
+#endif
+
     Mat highRes;
     resize(frame, highRes, Size(), scale, scale, INTER_CUBIC);
 
