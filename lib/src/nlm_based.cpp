@@ -105,7 +105,7 @@ namespace
     }
 #endif
 
-    double calcNlmWeight(const Mat_<Vec3b>& patch1, Point2d, const Mat_<Vec3b>& patch2, Point2d, double patchDiffWeight)
+    double calcNlmWeight(const Mat_<Vec3b>& patch1, const Mat_<Vec3b>& patch2, double patchDiffWeight)
     {
         CV_DbgAssert(patch1.size() == patch2.size());
 
@@ -175,7 +175,7 @@ namespace
 
                             const Mat_<Vec3b> Yt_patch = extractPatch<Vec3b>(Yt, Yt_loc, patchSize);
 
-                            const double w = calcNlmWeight(Z_patch, Z_loc, Yt_patch, Yt_loc, patchDiffWeight);
+                            const double w = calcNlmWeight(Z_patch, Yt_patch, patchDiffWeight);
 
                             if (w >= 0.1)
                             {
