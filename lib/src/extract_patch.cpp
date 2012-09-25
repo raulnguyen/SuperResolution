@@ -25,13 +25,12 @@
 
 #include "extract_patch.hpp"
 
-#ifdef WITH_TESTS
-
-#include <opencv2/core/core.hpp>
-#include <gtest/gtest.h>
-
 using namespace std;
 using namespace cv;
+
+#ifdef WITH_TESTS
+
+#include <gtest/gtest.h>
 
 TEST(ExtractPatch, Identical)
 {
@@ -46,7 +45,7 @@ TEST(ExtractPatch, Identical)
     extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);
     Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
 
-    Mat_<Vec3b> patch2 = extractPatch<Vec3b>(src, loc, patchSize);
+    Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize);
 
     double diff = norm(patch1, patch2, NORM_INF);
     ASSERT_EQ(diff, 0.0);
