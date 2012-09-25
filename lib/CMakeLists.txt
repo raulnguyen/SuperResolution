@@ -33,6 +33,10 @@ if(BUILD_WITH_TBB)
     target_link_libraries(${TARGET_NAME} ${TBB_LIBRARIES})
 endif()
 
+if(BUILD_TESTS)
+    target_link_libraries(${TARGET_NAME} ${GTEST_LIBRARIES})
+endif()
+
 set_target_properties(${TARGET_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
 install(FILES ${HEADER_FILES} "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_export.h" DESTINATION ${INCLUDE_INSTALL_DIR})
