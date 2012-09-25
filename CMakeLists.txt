@@ -134,7 +134,7 @@ message(STATUS "TBB support : ${BUILD_WITH_TBB}")
 message(STATUS "")
 message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
 message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
-message(STATUS "Build tests               : ${BUILD_SAMPLE_APPS}")
+message(STATUS "Build tests               : ${BUILD_TESTS}")
 
 message(STATUS "")
 message(STATUS "============== C/C++ options ================")
