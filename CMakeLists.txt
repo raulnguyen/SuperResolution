@@ -5,7 +5,7 @@
 # Vladislav Vinogradov (jet47)
 #
 
-########### CMake properties ########### 
+########### CMake properties ###########
 
 cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
 
@@ -29,20 +29,18 @@ set(PROJECT_COPYRIGHT_YEAR "2012")
 
 option(BUILD_WITH_TBB "Build with TBB support" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
-option(BUILD_SAMPLE_APPS "Build sample applications" OFF)
+option(BUILD_SAMPLE_APPS "Build sample applications" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
 set(BIN_INSTALL_DIR "bin")
 set(LIB_INSTALL_DIR "lib")
-set(INCLUDE_INSTALL_DIR "include")    
+set(INCLUDE_INSTALL_DIR "include")
 set(DOC_INSTALL_DIR "share/doc/${PROJECT_NAME}")
 
-message(STATUS "Configuring ${PROJECT_NAME} in ${CMAKE_BUILD_TYPE} mode")
-message(STATUS "Build options :")
-message(STATUS "TBB support : ${BUILD_WITH_TBB}")
-message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
-message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
-
 ############ Find packages #############
+
+include_directories("${CMAKE_SOURCE_DIR}/lib/include")
+include_directories("${CMAKE_BINARY_DIR}/lib")
 
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIR})
@@ -53,18 +51,24 @@ if(BUILD_WITH_TBB)
     link_directories(${TBB_LIBRARY_DIRS})
 endif()
 
-include_directories("${CMAKE_SOURCE_DIR}/lib/include")
-include_directories("${CMAKE_BINARY_DIR}/lib")
+if(BUILD_TESTS)
+    find_package(GTest REQUIRED)
+    include_directories(${GTEST_INCLUDE_DIRS})
+endif()
 
 ############ Subdirectories ############
 
 add_subdirectory(lib)
-	
+
 if(BUILD_SAMPLE_APPS)
     add_subdirectory(samples)
 endif()
 
-################ CPack #################
+if(BUILD_TESTS)
+    add_subdirectory(test)
+endif()
+
+############### Install ################
 
 set(README_FILE "${CMAKE_SOURCE_DIR}/README.md")
 set(LICENSE_FILE "${CMAKE_SOURCE_DIR}/COPYING")
@@ -73,6 +77,8 @@ install(FILES ${LICENSE_FILE} ${README_FILE} DESTINATION ${DOC_INSTALL_DIR})
 
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${BIN_INSTALL_DIR})
 include(InstallRequiredSystemLibraries)
+
+################ CPack #################
 
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Implementation of different Super Resolution algorithms")
 set(CPACK_PACKAGE_VENDOR "${PROJECT_VENDOR}")
@@ -96,3 +102,51 @@ endif()
 
 include(CPack)
 
+############### Summary ################
+
+message(STATUS "Configuring ${PROJECT_NAME}")
+
+message(STATUS "")
+message(STATUS "================= Platform ==================")
+message(STATUS "")
+message(STATUS "Host   : ${CMAKE_HOST_SYSTEM_NAME} ${CMAKE_HOST_SYSTEM_VERSION} ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+if(CMAKE_CROSSCOMPILING)
+    message(STATUS "Target : ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_VERSION} ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+message(STATUS "")
+message(STATUS "CMake            : ${CMAKE_VERSION}")
+message(STATUS "CMake Generator  : ${CMAKE_GENERATOR}")
+message(STATUS "CMake Build Tool : ${CMAKE_BUILD_TOOL}")
+if(MSVC)
+    message(STATUS "MSVC             : ${MSVC_VERSION}")
+endif()
+if(CMAKE_GENERATOR MATCHES Xcode)
+    message(STATUS "Xcode            : ${XCODE_VERSION}")
+endif()
+if(NOT CMAKE_GENERATOR MATCHES "Xcode|Visual Studio")
+    message(STATUS "Configuration    : ${CMAKE_BUILD_TYPE}")
+endif()
+
+message(STATUS "")
+message(STATUS "=============== Build options ===============")
+message(STATUS "")
+message(STATUS "TBB support : ${BUILD_WITH_TBB}")
+message(STATUS "")
+message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
+message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
+message(STATUS "Build tests               : ${BUILD_SAMPLE_APPS}")
+
+message(STATUS "")
+message(STATUS "============== C/C++ options ================")
+message(STATUS "")
+message(STATUS "C++ Compiler               : ${CMAKE_CXX_COMPILER}")
+message(STATUS "C++ flags (Release)        : ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+message(STATUS "C++ flags (Debug)          : ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+message(STATUS "C++ flags (RelWithDebInfo) : ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+message(STATUS "C++ flags (MinSizeRel)     : ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_MINSIZEREL}")
+message(STATUS "")
+message(STATUS "C Compiler               : ${CMAKE_C_COMPILER}")
+message(STATUS "C flags (Release)        : ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_RELEASE}")
+message(STATUS "C flags (Debug)          : ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_DEBUG}")
+message(STATUS "C flags (RelWithDebInfo) : ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+message(STATUS "C flags (MinSizeRel)     : ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_MINSIZEREL}")

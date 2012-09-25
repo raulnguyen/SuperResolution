@@ -47,32 +47,6 @@ using namespace cv::videostab;
         cout << msg << " Time : " << tm.getTimeSec() << " s" << endl; \
     }
 
-class ResizedSource : public IFrameSource
-{
-public:
-    ResizedSource(const Ptr<IFrameSource>& base, double scale) : base(base), scale(scale) {}
-
-    void reset();
-    Mat nextFrame();
-
-private:
-    Ptr<IFrameSource> base;
-    double scale;
-    Mat resized;
-};
-
-void ResizedSource::reset()
-{
-    base->reset();
-}
-
-Mat ResizedSource::nextFrame()
-{
-    Mat frame = base->nextFrame();
-    resize(frame, resized, Size(), scale, scale, INTER_AREA);
-    return resized;
-}
-
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,

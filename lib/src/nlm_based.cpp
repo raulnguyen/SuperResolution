@@ -62,7 +62,7 @@ NlmBased::NlmBased()
     sigma = 7.5;
 }
 
-#if defined(NDEBUG) && defined(HAVE_TBB)
+#ifdef HAVE_TBB
     typedef tbb::blocked_range<int> Range1D;
     typedef tbb::blocked_range2d<int> Range2D;
 
