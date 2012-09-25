@@ -39,7 +39,7 @@ CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
                   obj.info()->addParam(obj, "timeRadius", obj.timeRadius, false, 0, 0,
                                        "Radius of the time search area.");
                   obj.info()->addParam(obj, "patchSize", obj.patchSize, false, 0, 0,
-                                       "Size of tha patch at in high resolution image.");
+                                       "Size of the patch in high resolution image.");
                   obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
                                        "Weight of the patch difference"));
 
@@ -64,47 +64,6 @@ NlmBased::NlmBased()
 
 namespace
 {
-#ifdef HAVE_TBB
-    typedef tbb::blocked_range<int> Range1D;
-    typedef tbb::blocked_range2d<int> Range2D;
-
-    template <class Body>
-    void loop2D(const Range2D& range, const Body& body)
-    {
-        tbb::parallel_for(range, body);
-    }
-#else
-    class Range1D
-    {
-    public:
-        Range1D(int begin, int end) : begin_(begin), end_(end) {}
-
-        int begin() const { return begin_; }
-        int end() const { return end_; }
-
-    private:
-        int begin_, end_;
-    };
-
-    class Range2D
-    {
-    public:
-        Range2D(int row_begin, int row_end, int col_begin, int col_end) : rows_(row_begin, row_end), cols_(col_begin, col_end) {}
-
-        const Range1D& rows() const { return rows_; }
-        const Range1D& cols() const { return cols_; }
-
-    private:
-        Range1D rows_, cols_;
-    };
-
-    template <class Body>
-    void loop2D(const Range2D& range, const Body& body)
-    {
-        body(range);
-    }
-#endif
-
     double calcNlmWeight(const Mat_<Vec3b>& patch1, const Mat_<Vec3b>& patch2, double patchDiffWeight)
     {
         CV_DbgAssert(patch1.size() == patch2.size());
@@ -129,9 +88,9 @@ namespace
         return exp(-patchDiff * patchDiffWeight);
     }
 
-    struct LoopBody
+    struct LoopBody : ParallelLoopBody
     {
-        void operator ()(const Range2D& range) const;
+        void operator ()(const Range& range) const;
 
         int scale;
         int searchAreaRadius;
@@ -148,16 +107,16 @@ namespace
         mutable Mat_<Point3d> W;
     };
 
-    void LoopBody::operator ()(const Range2D& range) const
+    void LoopBody::operator ()(const Range& range) const
     {
         const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma);
 
         const Mat& Z = at(procPos, *Y);
 
         Point Z_loc;
-        for (Z_loc.y = range.rows().begin(); Z_loc.y < range.rows().end(); ++Z_loc.y)
+        for (Z_loc.y = range.start; Z_loc.y < range.end; ++Z_loc.y)
         {
-            for (Z_loc.x = range.cols().begin(); Z_loc.x < range.cols().end(); ++Z_loc.x)
+            for (Z_loc.x = 0; Z_loc.x < Z.cols; ++Z_loc.x)
             {
                 const Mat_<Vec3b> Z_patch = extractPatch<Vec3b>(Z, Z_loc, patchSize);
 
@@ -251,7 +210,7 @@ void NlmBased::processFrame(int idx)
     body.V = V;
     body.W = W;
 
-    loop2D(Range2D(0, V.rows, 0, V.cols), body);
+    parallel_for_(Range(0, V.rows), body);
 
     divide(V, W, Z);
 

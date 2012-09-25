@@ -15,10 +15,6 @@ include(GenerateExportHeader)
 
 add_compiler_export_flags()
 
-if(BUILD_WITH_TBB)
-    add_definitions(-DHAVE_TBB)
-endif()
-
 if(BUILD_TESTS)
     add_definitions(-DWITH_TESTS)
 endif()
@@ -28,10 +24,6 @@ add_library(${TARGET_NAME} ${HEADER_FILES} ${SOURCE_FILES} ${INTERNAL_HEADER_FIL
 generate_export_header(${TARGET_NAME})
 
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
-
-if(BUILD_WITH_TBB)
-    target_link_libraries(${TARGET_NAME} ${TBB_LIBRARIES})
-endif()
 
 if(BUILD_TESTS)
     target_link_libraries(${TARGET_NAME} ${GTEST_LIBRARIES})
