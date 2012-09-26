@@ -91,10 +91,10 @@ SUPER_RESOLUTION_NO_EXPORT void scalePatch(std::vector<T>& patch, int patchSize,
             patch[ind] /= scale[c];
 }
 
-SUPER_RESOLUTION_NO_EXPORT inline cv::Mat extractPatch(const cv::Mat& src, cv::Point p, int patchSize)
+SUPER_RESOLUTION_NO_EXPORT inline cv::Mat extractPatch(const cv::Mat& src, cv::Point p, int patchRadius, int ofs_x = 0, int ofs_y = 0)
 {
-    CV_DbgAssert(patchSize % 2 != 0);
-    return src(cv::Rect(p.x - patchSize / 2, p.y - patchSize / 2, patchSize, patchSize));
+    const int patchSize = 2 * patchRadius + 1;
+    return src(cv::Rect(p.x - patchRadius + ofs_x, p.y - patchRadius + ofs_y, patchSize, patchSize));
 }
 
 #endif // __EXTRACT_PATCH_HPP__

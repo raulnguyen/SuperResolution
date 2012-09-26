@@ -109,7 +109,6 @@ namespace
 
     void LoopBody::operator ()(const Range& range) const
     {
-        const int patchSize = patchRadius * 2 + 1;
         const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma);
 
         const Mat& Z = at(procPos, *Y);
@@ -119,7 +118,7 @@ namespace
         {
             for (Z_loc.x = patchRadius; Z_loc.x < Z.cols - patchRadius; ++Z_loc.x)
             {
-                const Mat_<Vec3b> Z_patch = extractPatch(Z, Z_loc, patchSize);
+                const Mat_<Vec3b> Z_patch = extractPatch(Z, Z_loc, patchRadius);
 
                 for (int t = -timeRadius; t <= timeRadius; ++t)
                 {
@@ -144,7 +143,7 @@ namespace
                             if (yt_loc.x < 0 || yt_loc.x >= yt.cols || Yt_loc.x - patchRadius < 0 || Yt_loc.x + patchRadius >= Yt.cols)
                                 continue;
 
-                            const Mat_<Vec3b> Yt_patch = extractPatch(Yt, Yt_loc, patchSize);
+                            const Mat_<Vec3b> Yt_patch = extractPatch(Yt, Yt_loc, patchRadius);
 
                             const double w = calcNlmWeight(Z_patch, Yt_patch, patchDiffWeight);
 

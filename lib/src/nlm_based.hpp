@@ -67,9 +67,6 @@ private:
     cv::Mat_<cv::Point3d> V;
     cv::Mat_<cv::Point3d> W;
 
-    std::vector<double> patch1;
-    std::vector<double> patch2;
-
     cv::Mat Z;
 };
 

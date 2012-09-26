@@ -53,7 +53,7 @@ TEST(ExtractPatch, Identical)
 
     Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
 
-    Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize);
+    Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize / 2);
 
     double diff = norm(patch1, patch2, NORM_INF);
     EXPECT_EQ(diff, 0.0);
