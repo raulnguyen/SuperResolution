@@ -54,7 +54,7 @@ private:
     int scale;
     int searchAreaRadius;
     int timeRadius;
-    int patchSize;
+    int patchRadius;
     double sigma;
 
     int storePos;

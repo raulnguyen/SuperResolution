@@ -38,8 +38,8 @@ CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
                                        "Radius of the patch search area in low resolution image.");
                   obj.info()->addParam(obj, "timeRadius", obj.timeRadius, false, 0, 0,
                                        "Radius of the time search area.");
-                  obj.info()->addParam(obj, "patchSize", obj.patchSize, false, 0, 0,
-                                       "Size of the patch in high resolution image.");
+                  obj.info()->addParam(obj, "patchRadius", obj.patchRadius, false, 0, 0,
+                                       "Radius of the patch.");
                   obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
                                        "Weight of the patch difference"));
 
@@ -58,8 +58,8 @@ NlmBased::NlmBased()
     scale = 2;
     searchAreaRadius = 10;
     timeRadius = 2;
-    patchSize = 13;
-    sigma = 7.5;
+    patchRadius = 3;
+    sigma = 3;
 }
 
 namespace
@@ -95,7 +95,7 @@ namespace
         int scale;
         int searchAreaRadius;
         int timeRadius;
-        int patchSize;
+        int patchRadius;
         double sigma;
 
         int procPos;
@@ -109,7 +109,7 @@ namespace
 
     void LoopBody::operator ()(const Range& range) const
     {
-        const int patchRad = patchSize/2;
+        const int patchSize = patchRadius * 2 + 1;
         const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma);
 
         const Mat& Z = at(procPos, *Y);
@@ -117,7 +117,7 @@ namespace
         Point Z_loc;
         for (Z_loc.y = range.start; Z_loc.y < range.end; ++Z_loc.y)
         {
-            for (Z_loc.x = patchRad; Z_loc.x < Z.cols - patchRad; ++Z_loc.x)
+            for (Z_loc.x = patchRadius; Z_loc.x < Z.cols - patchRadius; ++Z_loc.x)
             {
                 const Mat_<Vec3b> Z_patch = extractPatch(Z, Z_loc, patchSize);
 
@@ -133,7 +133,7 @@ namespace
                         yt_loc.y = Z_loc.y / scale + i;
                         Yt_loc.y = yt_loc.y * scale;
 
-                        if (yt_loc.y < 0 || yt_loc.y >= yt.rows || Yt_loc.y - patchRad < 0 || Yt_loc.y + patchRad >= Yt.rows)
+                        if (yt_loc.y < 0 || yt_loc.y >= yt.rows || Yt_loc.y - patchRadius < 0 || Yt_loc.y + patchRadius >= Yt.rows)
                             continue;
 
                         for (int j = -searchAreaRadius; j <= searchAreaRadius; ++j)
@@ -141,7 +141,7 @@ namespace
                             yt_loc.x = Z_loc.x / scale + j;
                             Yt_loc.x = yt_loc.x * scale;
 
-                            if (yt_loc.x < 0 || yt_loc.x >= yt.cols || Yt_loc.x - patchRad < 0 || Yt_loc.x + patchRad >= Yt.cols)
+                            if (yt_loc.x < 0 || yt_loc.x >= yt.cols || Yt_loc.x - patchRadius < 0 || Yt_loc.x + patchRadius >= Yt.cols)
                                 continue;
 
                             const Mat_<Vec3b> Yt_patch = extractPatch(Yt, Yt_loc, patchSize);
@@ -211,7 +211,7 @@ void NlmBased::processFrame(int idx)
     body.scale = scale;
     body.searchAreaRadius = searchAreaRadius;
     body.timeRadius = timeRadius;
-    body.patchSize = patchSize;
+    body.patchRadius = patchRadius;
     body.sigma = sigma;
 
     body.procPos = idx;
@@ -222,7 +222,7 @@ void NlmBased::processFrame(int idx)
     body.V = V;
     body.W = W;
 
-    parallel_for_(Range(patchSize/2, V.rows - patchSize/2), body);
+    parallel_for_(Range(patchRadius, V.rows - patchRadius), body);
 
     divide(V, W, Z);
 
