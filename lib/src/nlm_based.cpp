@@ -34,10 +34,10 @@ using namespace cv::superres;
 CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
                   obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                        "Scale factor.");
-                  obj.info()->addParam(obj, "searchAreaRadius", obj.searchAreaRadius, false, 0, 0,
-                                       "Radius of the patch search area in low resolution image.");
-                  obj.info()->addParam(obj, "timeRadius", obj.timeRadius, false, 0, 0,
-                                       "Radius of the time search area.");
+                  obj.info()->addParam(obj, "searchWindowRadius", obj.searchWindowRadius, false, 0, 0,
+                                       "Radius of the patch search window in low resolution image.");
+                  obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
+                                       "Radius of the temporal search area.");
                   obj.info()->addParam(obj, "patchRadius", obj.patchRadius, false, 0, 0,
                                        "Radius of the patch.");
                   obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
@@ -56,8 +56,8 @@ Ptr<VideoSuperResolution> NlmBased::create()
 NlmBased::NlmBased()
 {
     scale = 2;
-    searchAreaRadius = 10;
-    timeRadius = 2;
+    searchWindowRadius = 10;
+    temporalAreaRadius = 2;
     patchRadius = 3;
     sigma = 3;
 }
@@ -93,8 +93,8 @@ namespace
         void operator ()(const Range& range) const;
 
         int scale;
-        int searchAreaRadius;
-        int timeRadius;
+        int searchWindowRadius;
+        int temporalAreaRadius;
         int patchRadius;
         double sigma;
 
@@ -120,14 +120,14 @@ namespace
             {
                 const Mat_<Vec3b> Z_patch = extractPatch(Z, Z_loc, patchRadius);
 
-                for (int t = -timeRadius; t <= timeRadius; ++t)
+                for (int t = -temporalAreaRadius; t <= temporalAreaRadius; ++t)
                 {
                     const Mat& Yt = at(procPos + t, *Y);
                     const Mat& yt = at(procPos + t, *y);
 
                     Point yt_loc;
                     Point Yt_loc;
-                    for (int i = -searchAreaRadius; i <= searchAreaRadius; ++i)
+                    for (int i = -searchWindowRadius; i <= searchWindowRadius; ++i)
                     {
                         yt_loc.y = Z_loc.y / scale + i;
                         Yt_loc.y = yt_loc.y * scale;
@@ -135,7 +135,7 @@ namespace
                         if (yt_loc.y < 0 || yt_loc.y >= yt.rows || Yt_loc.y - patchRadius < 0 || Yt_loc.y + patchRadius >= Yt.rows)
                             continue;
 
-                        for (int j = -searchAreaRadius; j <= searchAreaRadius; ++j)
+                        for (int j = -searchWindowRadius; j <= searchWindowRadius; ++j)
                         {
                             yt_loc.x = Z_loc.x / scale + j;
                             Yt_loc.x = yt_loc.x * scale;
@@ -165,14 +165,14 @@ namespace
 
 void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
 {
-    y.resize(3 * timeRadius + 2);
-    Y.resize(3 * timeRadius + 2);
+    y.resize(3 * temporalAreaRadius + 2);
+    Y.resize(3 * temporalAreaRadius + 2);
 
     storePos = -1;
-    procPos = storePos - 2 * timeRadius;
-    outPos = procPos - timeRadius - 1;
+    procPos = storePos - 2 * temporalAreaRadius;
+    outPos = procPos - temporalAreaRadius - 1;
 
-    for (int t = -timeRadius; t <= 2 * timeRadius; ++t)
+    for (int t = -temporalAreaRadius; t <= 2 * temporalAreaRadius; ++t)
     {
         Mat frame = frameSource->nextFrame();
 
@@ -182,7 +182,7 @@ void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
     }
 
     processFrame(procPos);
-    for (int t = 1; t <= timeRadius; ++t)
+    for (int t = 1; t <= temporalAreaRadius; ++t)
         processFrame(procPos + t);
     processFrame(procPos);
 }
@@ -191,7 +191,7 @@ Mat NlmBased::processImpl(const Mat& frame)
 {
     addNewFrame(frame);
 
-    processFrame(procPos + timeRadius);
+    processFrame(procPos + temporalAreaRadius);
     processFrame(procPos);
 
     return at(outPos, Y);
@@ -208,8 +208,8 @@ void NlmBased::processFrame(int idx)
     LoopBody body;
 
     body.scale = scale;
-    body.searchAreaRadius = searchAreaRadius;
-    body.timeRadius = timeRadius;
+    body.searchWindowRadius = searchWindowRadius;
+    body.temporalAreaRadius = temporalAreaRadius;
     body.patchRadius = patchRadius;
     body.sigma = sigma;
 

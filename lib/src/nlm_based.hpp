@@ -52,8 +52,8 @@ private:
     void processFrame(int idx);
 
     int scale;
-    int searchAreaRadius;
-    int timeRadius;
+    int searchWindowRadius;
+    int temporalAreaRadius;
     int patchRadius;
     double sigma;
 
