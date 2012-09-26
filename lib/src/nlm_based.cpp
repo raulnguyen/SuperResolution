@@ -60,6 +60,14 @@ NlmBased::NlmBased()
     temporalAreaRadius = 2;
     patchRadius = 3;
     sigma = 3;
+
+    Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2());
+    motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
+    deblurer = new WeightingDeblurer;
+
+    deblurer->setFrames(Y);
+    deblurer->setMotions(motions);
+    deblurer->setBlurrinessRates(blurrinessRates);
 }
 
 namespace
@@ -76,12 +84,12 @@ namespace
                 Vec3b val1 = patch1(y, x);
                 Vec3b val2 = patch2(y, x);
 
-                double val1d = val1[0];
-                double val2d = val2[0];
+                Point3d val1d(val1[0], val1[1], val1[2]);
+                Point3d val2d(val2[0], val2[1], val2[2]);
 
-                double diff = val1d - val2d;
+                Point3d diff = val1d - val2d;
 
-                patchDiff += diff * diff;
+                patchDiff += diff.x * diff.x;
             }
         }
 
@@ -166,8 +174,14 @@ namespace
 
 void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
 {
-    y.resize(3 * temporalAreaRadius + 2);
-    Y.resize(3 * temporalAreaRadius + 2);
+    deblurer->setRadius(temporalAreaRadius);
+
+    const int cacheSize = 3 * temporalAreaRadius + 2;
+
+    y.resize(cacheSize);
+    Y.resize(cacheSize);
+    motions.resize(cacheSize);
+    blurrinessRates.resize(cacheSize);
 
     storePos = -1;
     procPos = storePos - 2 * temporalAreaRadius;
@@ -180,20 +194,43 @@ void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
         CV_Assert(!frame.empty());
 
         addNewFrame(frame);
+
+        at(storePos, blurrinessRates) = calcBlurriness(at(storePos, Y));
+        if (storePos > 0)
+            at(storePos - 1, motions) = motionEstimator->estimate(at(storePos - 1, Y), at(storePos, Y));
     }
 
     processFrame(procPos);
     for (int t = 1; t <= temporalAreaRadius; ++t)
         processFrame(procPos + t);
     processFrame(procPos);
+
+    for (int t = -1; t <= temporalAreaRadius; ++t)
+    {
+        at(procPos + t, motions) = motionEstimator->estimate(at(procPos + t, Y), at(procPos + t + 1, Y));
+        at(procPos + t, blurrinessRates) = calcBlurriness(at(procPos + t, Y));
+    }
 }
 
 Mat NlmBased::processImpl(const Mat& frame)
 {
     addNewFrame(frame);
 
+    at(storePos, blurrinessRates) = calcBlurriness(at(storePos, Y));
+    at(storePos - 1, motions) = motionEstimator->estimate(at(storePos - 1, Y), at(storePos, Y));
+
     processFrame(procPos + temporalAreaRadius);
     processFrame(procPos);
+
+    at(procPos - 1, motions) = motionEstimator->estimate(at(procPos - 1, Y), at(procPos, Y));
+    at(procPos, motions) = motionEstimator->estimate(at(procPos, Y), at(procPos + 1, Y));
+
+    at(procPos + temporalAreaRadius - 1, motions) = motionEstimator->estimate(at(procPos + temporalAreaRadius - 1, Y), at(procPos + temporalAreaRadius, Y));
+
+    at(procPos, blurrinessRates) = calcBlurriness(at(procPos, Y));
+    at(procPos + temporalAreaRadius, blurrinessRates) = calcBlurriness(at(procPos + temporalAreaRadius, Y));
+
+    deblurer->deblur(procPos, at(procPos, Y));
 
     cvtColor(at(outPos, Y), buf, COLOR_Lab2LBGR);
 

@@ -64,9 +64,6 @@ int main(int argc, const char* argv[])
 
     superRes->setFrameSource(videoSource);
 
-    namedWindow("Result", WINDOW_NORMAL);
-    namedWindow("BiCubic", WINDOW_NORMAL);
-
     for (;;)
     {
         Mat result;

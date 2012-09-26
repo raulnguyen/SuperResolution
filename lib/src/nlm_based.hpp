@@ -70,6 +70,11 @@ private:
     cv::Mat Z;
 
     cv::Mat buf;
+
+    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
+    cv::Ptr<cv::videostab::DeblurerBase> deblurer;
+    std::vector<cv::Mat> motions;
+    std::vector<float> blurrinessRates;
 };
 
 #endif // __NLM_BASED_HPP__
