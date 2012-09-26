@@ -68,6 +68,8 @@ private:
     cv::Mat_<cv::Point3d> W;
 
     cv::Mat Z;
+
+    cv::Mat buf;
 };
 
 #endif // __NLM_BASED_HPP__

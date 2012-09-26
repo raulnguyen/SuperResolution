@@ -76,12 +76,12 @@ namespace
                 Vec3b val1 = patch1(y, x);
                 Vec3b val2 = patch2(y, x);
 
-                Point3d val1d(val1[0], val1[1], val1[2]);
-                Point3d val2d(val2[0], val2[1], val2[2]);
+                double val1d = val1[0];
+                double val2d = val2[0];
 
-                Point3d diff = val1d - val2d;
+                double diff = val1d - val2d;
 
-                patchDiff += diff.ddot(diff);
+                patchDiff += diff * diff;
             }
         }
 
@@ -109,7 +109,8 @@ namespace
 
     void LoopBody::operator ()(const Range& range) const
     {
-        const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma);
+        const int patchSize = 2 * patchRadius + 1;
+        const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma * patchSize * patchSize);
 
         const Mat& Z = at(procPos, *Y);
 
@@ -194,7 +195,9 @@ Mat NlmBased::processImpl(const Mat& frame)
     processFrame(procPos + temporalAreaRadius);
     processFrame(procPos);
 
-    return at(outPos, Y);
+    cvtColor(at(outPos, Y), buf, COLOR_Lab2LBGR);
+
+    return buf;
 }
 
 void NlmBased::processFrame(int idx)
@@ -237,6 +240,8 @@ void NlmBased::addNewFrame(const cv::Mat& frame)
     ++procPos;
     ++outPos;
 
-    frame.copyTo(at(storePos, y));
-    resize(frame, at(storePos, Y), Size(), scale, scale, INTER_CUBIC);
+    resize(frame, buf, Size(), scale, scale, INTER_CUBIC);
+
+    cvtColor(frame, at(storePos, y), COLOR_LBGR2Lab);
+    cvtColor(buf, at(storePos, Y), COLOR_LBGR2Lab);
 }
