@@ -43,6 +43,9 @@ TEST(ExtractPatch, Identical)
 
     vector<uchar> patch1Vec;
     extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);
+
+    ASSERT_EQ(patchSize * patchSize * 3, patch1Vec.size());
+
     Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
 
     Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize);
