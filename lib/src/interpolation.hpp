@@ -32,16 +32,13 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "super_resolution_export.h"
 
-namespace detail
+template <typename T, typename D>
+SUPER_RESOLUTION_NO_EXPORT D readVal(const cv::Mat& src, int y, int x, int c, int borderMode = cv::BORDER_CONSTANT, cv::Scalar borderVal = cv::Scalar())
 {
-    template <typename T, typename D>
-    SUPER_RESOLUTION_NO_EXPORT T readVal(const cv::Mat& src, int y, int x, int c, int borderMode, cv::Scalar borderVal)
-    {
-        if (borderMode == cv::BORDER_CONSTANT)
-            return (y >= 0 && y < src.rows && x >= 0 && x < src.cols) ? cv::saturate_cast<D>(src.at<T>(y, x * src.channels() + c)) : cv::saturate_cast<D>(borderVal.val[c]);
+    if (borderMode == cv::BORDER_CONSTANT)
+        return (y >= 0 && y < src.rows && x >= 0 && x < src.cols) ? cv::saturate_cast<D>(src.at<T>(y, x * src.channels() + c)) : cv::saturate_cast<D>(borderVal.val[c]);
 
-        return cv::saturate_cast<D>(src.at<T>(cv::borderInterpolate(y, src.rows, borderMode), cv::borderInterpolate(x, src.cols, borderMode) * src.channels() + c));
-    }
+    return cv::saturate_cast<D>(src.at<T>(cv::borderInterpolate(y, src.rows, borderMode), cv::borderInterpolate(x, src.cols, borderMode) * src.channels() + c));
 }
 
 template <typename T, typename D>
@@ -49,14 +46,14 @@ struct SUPER_RESOLUTION_NO_EXPORT NearestInterpolator
 {
     static D getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {
-        return detail::readVal<T, D>(src, int(y), int(x), c, borderMode, borderVal);
+        return readVal<T, D>(src, int(y), int(x), c, borderMode, borderVal);
     }
 };
 
 template <typename T, typename D>
 struct SUPER_RESOLUTION_NO_EXPORT LinearInterpolator
 {
-    static T getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
+    static D getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {
         const int x1 = cvFloor(x);
         const int y1 = cvFloor(y);
@@ -65,10 +62,10 @@ struct SUPER_RESOLUTION_NO_EXPORT LinearInterpolator
 
         double res = 0;
 
-        res += detail::readVal<T, double>(src, y1, x1, c, borderMode, borderVal) * ((x2 - x) * (y2 - y));
-        res += detail::readVal<T, double>(src, y1, x2, c, borderMode, borderVal) * ((x - x1) * (y2 - y));
-        res += detail::readVal<T, double>(src, y2, x1, c, borderMode, borderVal) * ((x2 - x) * (y - y1));
-        res += detail::readVal<T, double>(src, y2, x2, c, borderMode, borderVal) * ((x - x1) * (y - y1));
+        res += readVal<T, double>(src, y1, x1, c, borderMode, borderVal) * ((x2 - x) * (y2 - y));
+        res += readVal<T, double>(src, y1, x2, c, borderMode, borderVal) * ((x - x1) * (y2 - y));
+        res += readVal<T, double>(src, y2, x1, c, borderMode, borderVal) * ((x2 - x) * (y - y1));
+        res += readVal<T, double>(src, y2, x2, c, borderMode, borderVal) * ((x - x1) * (y - y1));
 
         return cv::saturate_cast<D>(res);
     }
@@ -77,7 +74,7 @@ struct SUPER_RESOLUTION_NO_EXPORT LinearInterpolator
 template <typename T, typename D>
 struct SUPER_RESOLUTION_NO_EXPORT CubicInterpolator
 {
-    static T getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
+    static D getValue(const cv::Mat& src, double y, double x, int c = 0, int borderMode = cv::BORDER_REFLECT_101, cv::Scalar borderVal = cv::Scalar())
     {
         const int xmin = cvCeil(x - 2);
         const int xmax = cvFloor(x + 2);
@@ -94,7 +91,7 @@ struct SUPER_RESOLUTION_NO_EXPORT CubicInterpolator
             {
                 const double w = bicubicCoeff(x - cx) * bicubicCoeff(y - cy);
 
-                sum += w * detail::readVal<T, double>(src, cvFloor(cy), cvFloor(cx), c, borderMode, borderVal);
+                sum += w * readVal<T, double>(src, cvFloor(cy), cvFloor(cx), c, borderMode, borderVal);
                 wsum += w;
             }
         }

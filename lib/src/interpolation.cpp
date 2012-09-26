@@ -23,7 +23,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "extract_patch.hpp"
+#include "interpolation.hpp"
 
 #ifdef WITH_TESTS
 #include <opencv2/ts/ts_gtest.h>
@@ -37,26 +37,62 @@ using namespace cv;
 
 #ifdef WITH_TESTS
 
-TEST(ExtractPatch, Identical)
+TEST(ReadVal, Inner)
 {
-    Mat src(100, 100, CV_8UC3);
+    Mat_<Vec3b> src(3, 3);
+    src << Vec3b(0,1,2), Vec3b(3,4,5), Vec3b(6,7,8), Vec3b(9,10,11), Vec3b(12,13,14), Vec3b(15,16,17), Vec3b(18,19,20), Vec3b(21,22,23), Vec3b(24,25,26);
 
-    theRNG().fill(src, RNG::UNIFORM, 0, 255);
+    for (int y = 0; y < src.rows; ++y)
+    {
+        for (int x = 0; x < src.cols; ++x)
+        {
+            for (int c = 0; c < src.channels(); ++c)
+            {
+                int gold = src(y, x)[c];
+                int val = readVal<uchar, uchar>(src, y, x, c);
+                EXPECT_EQ(gold, val);
+            }
+        }
+    }
+}
 
-    const Point loc(src.cols / 2, src.rows / 2);
-    const int patchSize = 21;
+TEST(ReadVal, OutOfBorder)
+{
+    Mat_<Vec3b> src(3, 3);
+    src << Vec3b(0,1,2), Vec3b(3,4,5), Vec3b(6,7,8), Vec3b(9,10,11), Vec3b(12,13,14), Vec3b(15,16,17), Vec3b(18,19,20), Vec3b(21,22,23), Vec3b(24,25,26);
 
-    vector<uchar> patch1Vec;
-    extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);
+    for (int y = -src.rows; y < 0; ++y)
+    {
+        for (int x = -src.cols; x < 0; ++x)
+        {
+            for (int c = 0; c < src.channels(); ++c)
+            {
+                int gold = src(borderInterpolate(y, src.rows, BORDER_REFLECT_101), borderInterpolate(x, src.cols, BORDER_REFLECT_101))[c];
+                int val = readVal<uchar, uchar>(src, y, x, c, BORDER_REFLECT_101);
+                EXPECT_EQ(gold, val);
+            }
+        }
+    }
+}
 
-    ASSERT_EQ(patchSize * patchSize * 3, patch1Vec.size());
+TEST(NearestInterpolator, GetValue)
+{
+    Mat_<int> src(3, 3);
+    src << 0, 1, 2, 3, 4, 5, 6, 7, 8;
 
-    Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
+    int gold = src(1, 1);
+    int val = NearestInterpolator<int, int>::getValue(src, 1.5, 1.5);
+    EXPECT_EQ(gold, val);
+}
 
-    Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize);
+TEST(LinearInterpolator, GetValue)
+{
+    Mat_<int> src(3, 3);
+    src << 0, 1, 2, 3, 4, 5, 6, 7, 8;
 
-    double diff = norm(patch1, patch2, NORM_INF);
-    EXPECT_EQ(diff, 0.0);
+    double gold = 0.25 * src(1, 1) + 0.25 * src(1, 2) + 0.25 * src(2, 1) + 0.25 * src(2, 2);
+    double val = LinearInterpolator<int, double>::getValue(src, 1.5, 1.5);
+    EXPECT_EQ(gold, val);
 }
 
 #endif // WITH_TESTS
