@@ -25,10 +25,6 @@ generate_export_header(${TARGET_NAME})
 
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
 
-if(BUILD_TESTS)
-    target_link_libraries(${TARGET_NAME} ${GTEST_LIBRARIES})
-endif()
-
 set_target_properties(${TARGET_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
 install(FILES ${HEADER_FILES} "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_export.h" DESTINATION ${INCLUDE_INSTALL_DIR})

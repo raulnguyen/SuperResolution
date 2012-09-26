@@ -30,7 +30,7 @@ using namespace cv;
 
 #ifdef WITH_TESTS
 
-#include <gtest/gtest.h>
+#include <opencv2/ts/ts_gtest.h>
 
 TEST(ExtractPatch, Identical)
 {
@@ -39,7 +39,7 @@ TEST(ExtractPatch, Identical)
     theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
     const Point loc(src.cols / 2, src.rows / 2);
-    const int patchSize = 20;
+    const int patchSize = 21;
 
     vector<uchar> patch1Vec;
     extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);

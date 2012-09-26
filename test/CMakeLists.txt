@@ -14,7 +14,7 @@ add_executable(${TARGET_NAME} ${HEADER_FILES} ${SOURCE_FILES})
 
 add_dependencies(${TARGET_NAME} ${PROJECT_BASE_NAME})
 
-target_link_libraries(${TARGET_NAME} ${PROJECT_BASE_NAME} ${OpenCV_LIBS} ${GTEST_LIBRARIES})
+target_link_libraries(${TARGET_NAME} ${PROJECT_BASE_NAME} ${OpenCV_LIBS})
 
 enable_testing()
 add_test(AllTests ${TARGET_NAME})
