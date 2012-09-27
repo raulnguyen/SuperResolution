@@ -56,6 +56,7 @@ private:
     int temporalAreaRadius;
     int patchRadius;
     double sigma;
+    bool doDeblurring;
 
     int storePos;
     int procPos;
@@ -73,6 +74,7 @@ private:
 
     cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
     cv::Ptr<cv::videostab::DeblurerBase> deblurer;
+    std::vector<cv::Mat> outFrames;
     std::vector<cv::Mat> motions;
     std::vector<float> blurrinessRates;
 };
