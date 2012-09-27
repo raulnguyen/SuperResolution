@@ -46,8 +46,8 @@ public:
     void train(const std::vector<cv::Mat>& images);
     void train(const cv::Mat& image);
 
-    void save(const std::string& fileName) const;
-    void load(const std::string& fileName);
+    void write(cv::FileStorage& fs) const;
+    void read(const cv::FileNode& fn);
 
     bool empty() const;
     void clear();
@@ -68,6 +68,8 @@ private:
     double stdDevThresh;
 
     cv::Ptr<cv::DescriptorMatcher> matcher;
+
+    bool saveTrainBase;
 
     cv::Mat lowResPatches;
     cv::Mat highResPatches;

@@ -47,7 +47,9 @@ CV_INIT_ALGORITHM(ExampledBased, "ImageSuperResolution.ExampledBased",
                   obj.info()->addParam(obj, "stdDevThresh", obj.stdDevThresh, false, 0, 0,
                                        "Threshold value for patch standard deviation, only patches with high deviation will be processed.");
                   obj.info()->addParam<DescriptorMatcher>(obj, "matcher", obj.matcher, false, 0, 0,
-                                                          "Matching algorithm."));
+                                                          "Matching algorithm.");
+                  obj.info()->addParam(obj, "saveTrainBase", obj.saveTrainBase, false, 0, 0,
+                                       "Store train base in write method."));
 
 bool ExampledBased::init()
 {
@@ -67,6 +69,7 @@ ExampledBased::ExampledBased()
     highResPatchSize = 5;
     stdDevThresh = 15.0;
     matcher = new BFMatcher(NORM_L2SQR);
+    saveTrainBase = true;
 }
 
 void ExampledBased::train(const vector<Mat>& images)
@@ -309,30 +312,26 @@ void ExampledBased::buildPatchLists(const Mat& highRes, Mat& lowResPatches, Mat&
     }
 }
 
-void ExampledBased::save(const string& fileName) const
+void ExampledBased::write(FileStorage& fs) const
 {
-    CV_DbgAssert(!empty());
+    ImageSuperResolution::write(fs);
 
-    FileStorage fs(fileName, FileStorage::WRITE);
-
-    cv::write(fs, "lowResPatchSize", lowResPatchSize);
-    cv::write(fs, "highResPatchSize", highResPatchSize);
-
-    cv::write(fs, "lowResPatches", lowResPatches);
-    cv::write(fs, "highResPatches", highResPatches);
+    if (saveTrainBase && !empty())
+    {
+        cv::write(fs, "lowResPatches", lowResPatches);
+        cv::write(fs, "highResPatches", highResPatches);
+    }
 }
 
-void ExampledBased::load(const string& fileName)
+void ExampledBased::read(const FileNode& fn)
 {
-    FileStorage fs(fileName, FileStorage::READ);
+    ImageSuperResolution::read(fn);
 
-    cv::read(fs["lowResPatchSize"], lowResPatchSize, 0);
-    cv::read(fs["highResPatchSize"], highResPatchSize, 0);
-
-    cv::read(fs["lowResPatches"], lowResPatches);
-    cv::read(fs["highResPatches"], highResPatches);
-
-    CV_DbgAssert(lowResPatches.rows == highResPatches.rows);
+    if (saveTrainBase)
+    {
+        cv::read(fn["lowResPatches"], lowResPatches);
+        cv::read(fn["highResPatches"], highResPatches);
+    }
 }
 
 bool ExampledBased::empty() const

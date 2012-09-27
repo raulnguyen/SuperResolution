@@ -54,9 +54,6 @@ namespace cv
             virtual void train(const Mat& image);
             template <class Iter> void train(Iter begin, Iter end);
 
-            virtual void save(const std::string& fileName) const = 0;
-            virtual void load(const std::string& fileName) = 0;
-
             virtual bool empty() const = 0;
             virtual void clear() = 0;
 
