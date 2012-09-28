@@ -64,7 +64,7 @@ NlmBased::NlmBased()
     sigma = 3;
     doDeblurring = true;
 
-    Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2());
+    Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2);
     motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
     deblurer = new WeightingDeblurer;
 

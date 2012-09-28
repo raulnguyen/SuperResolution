@@ -25,6 +25,7 @@
 
 #include "super_resolution.hpp"
 #include "exampled_based.hpp"
+#include "bilateral_total_variation.hpp"
 #include "nlm_based.hpp"
 
 using namespace std;
@@ -36,6 +37,8 @@ bool cv::superres::initModule_superres()
     bool all = true;
 
     all &= ExampledBased::init();
+    all &= BilateralTotalVariation::init();
+
     all &= NlmBased::init();
 
     return all;
@@ -49,7 +52,8 @@ Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMeth
     typedef Ptr<ImageSuperResolution> (*func_t)();
     static const func_t funcs[] =
     {
-        ExampledBased::create
+        ExampledBased::create,
+        BilateralTotalVariation::create
     };
 
     CV_DbgAssert(method >= IMAGE_SR_EXAMPLE_BASED && method < IMAGE_SR_METHOD_MAX);

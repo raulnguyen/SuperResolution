@@ -49,35 +49,62 @@ using namespace cv::superres;
 
 namespace
 {
-    vector<string> split_string(const string& _str, char symbol)
+    void addGaussNoise(Mat_<Vec3b>& image, double sigma)
     {
-        string str = _str;
-        string word;
-        vector<string> vec;
+        Mat_<float> noise(image.size());
 
-        while (!str.empty())
+        vector<Mat> channels;
+        split(image, channels);
+
+        Mat_<float> src_f;
+        Mat_<float> temp;
+
+        for(int c = 0; c < image.channels(); ++c)
         {
-            if (str[0] == symbol)
-            {
-                if (!word.empty())
-                {
-                    vec.push_back(word);
-                    word = "";
-                }
-            }
-            else
-            {
-                word += str[0];
-            }
-            str = str.substr(1, str.length() - 1);
+            channels[c].convertTo(src_f, src_f.depth());
+
+            randn(noise, Scalar(0.0), Scalar(sigma));
+
+            add(src_f, noise, temp);
+
+            temp.convertTo(channels[c], channels[c].depth());
         }
 
-        if (!word.empty())
-        {
-            vec.push_back(word);
-        }
+        merge(channels, image);
+    }
 
-        return vec;
+    void addSpikeNoise(Mat_<Vec3b>& image, int val)
+    {
+        for (int y = 0; y < image.rows; ++y)
+        {
+            Vec3b* imageRow = image[y];
+
+            for (int x = 0; x < image.cols; ++x)
+            {
+                if (theRNG().uniform(0 ,val) < 1)
+                    imageRow[x] = Vec3b(255, 255, 255);
+            }
+        }
+    }
+
+    Mat createDegradedImage(const Mat& src, Point2d move, int scale)
+    {
+        const double iscale = 1.0 / scale;
+
+        Mat_<Vec3b> temp;
+        blur(src, temp, Size(scale, scale));
+
+        Mat_<float> M(2, 3);
+        M << iscale, 0     , move.x * iscale,
+             0     , iscale, move.y * iscale;
+
+        Mat_<Vec3b> deg;
+        warpAffine(temp, deg, M, Size(src.cols * iscale, src.rows * iscale));
+
+        addGaussNoise(deg, 10.0);
+        addSpikeNoise(deg, 500);
+
+        return deg;
     }
 }
 
@@ -86,7 +113,6 @@ int main(int argc, const char* argv[])
     CommandLineParser cmd(argc, argv,
         "{ image i | boy.png | Input image }"
         "{ scale s | 2       | Scale factor }"
-        "{ train t | none    | Train images (separated by :) }"
         "{ help h  |         | Print help message }"
     );
 
@@ -98,54 +124,51 @@ int main(int argc, const char* argv[])
     }
 
     const string imageFileName = cmd.get<string>("image");
-    const double scale = cmd.get<double>("scale");
-    const string trainImagesStr = cmd.get<string>("train");
+    const int scale = cmd.get<int>("scale");
 
-    Mat image = imread(imageFileName);
-    if (image.empty())
+    Mat gold = imread(imageFileName);
+    if (gold.empty())
     {
         cerr << "Can't open image " << imageFileName << endl;
         return -1;
     }
+    imshow("gold", gold);
+    waitKey();
 
-    vector<Mat> trainImages;
-    if (trainImagesStr != "none")
+    Mat src = createDegradedImage(gold, Point2d(0,0), scale);
+    imshow("src", src);
+    waitKey();
+
+    // number of input images for super resolution
+    const int degImagesCount = 16;
+    vector<Mat> degImages(degImagesCount);
+    for (int i = 0; i < degImagesCount; ++i)
     {
-        const vector<string> trainImagesStrVec = split_string(trainImagesStr, ':');
-        for (size_t i = 0; i < trainImagesStrVec.size(); ++i)
-        {
-            Mat curImage = imread(trainImagesStrVec[i]);
-            if (image.empty())
-            {
-                cerr << "Can't open image " << trainImagesStrVec[i] << endl;
-                return -1;
-            }
-            trainImages.push_back(curImage);
-        }
-    }
+        Point2d move;
+        move.x = theRNG().uniform(0.0, (double)scale);
+        move.y = theRNG().uniform(0.0, (double)scale);
 
-    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_EXAMPLE_BASED);
-    Mat highResImage;
+        degImages[i] = createDegradedImage(gold, move, scale);
+
+        cout << i << " move : (" << move.x << ", " << move.y << ")" << endl;
+        imshow("degImage", degImages[i]);
+        waitKey();
+    }
+    destroyWindow("degImage");
+
+    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION);
 
     superRes->set("scale", scale);
 
-    if (!trainImages.empty())
-    {
-        MEASURE_TIME(superRes->train(trainImages), "Train");
-    }
+    superRes->train(degImages);
 
-    MEASURE_TIME(superRes->process(image, highResImage), "Process");
+    Mat highResImage;
+    MEASURE_TIME(superRes->process(src, highResImage), "Process");
 
     Mat bicubic;
-    resize(image, bicubic, Size(), scale, scale, INTER_CUBIC);
+    resize(src, bicubic, Size(), scale, scale, INTER_CUBIC);
 
-    namedWindow("Input Image", WINDOW_NORMAL);
-    imshow("Input Image", image);
-
-    namedWindow("Super Resolution", WINDOW_NORMAL);
     imshow("Super Resolution", highResImage);
-
-    namedWindow("Bi-Cubic Interpolation", WINDOW_NORMAL);
     imshow("Bi-Cubic Interpolation", bicubic);
 
     waitKey();

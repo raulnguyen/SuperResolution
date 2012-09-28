@@ -25,49 +25,57 @@
 
 #pragma once
 
-#ifndef __IMAGE_SUPER_RESOLUTION_HPP__
-#define __IMAGE_SUPER_RESOLUTION_HPP__
+#ifndef __BILATERAL_TOTAL_VARIATION_HPP__
+#define __BILATERAL_TOTAL_VARIATION_HPP__
 
-#include <string>
-#include <vector>
-#include <opencv2/core/core.hpp>
+#include <opencv2/videostab/global_motion.hpp>
+#include "image_super_resolution.hpp"
 #include "super_resolution_export.h"
 
-namespace cv
+// S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
+// Thanks to https://github.com/Palethorn/SuperResolution implementation.
+class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public cv::superres::ImageSuperResolution
 {
-    namespace superres
-    {
-        enum ImageSRMethod
-        {
-            IMAGE_SR_EXAMPLE_BASED,
-            IMAGE_SR_BILATERAL_TOTAL_VARIATION,
-            IMAGE_SR_METHOD_MAX
-        };
+public:
+    static bool init();
+    static cv::Ptr<ImageSuperResolution> create();
 
-        class SUPER_RESOLUTION_EXPORT ImageSuperResolution : public Algorithm
-        {
-        public:
-            static Ptr<ImageSuperResolution> create(ImageSRMethod method);
+    cv::AlgorithmInfo* info() const;
 
-            virtual ~ImageSuperResolution();
+    BilateralTotalVariation();
 
-            virtual void train(const std::vector<Mat>& images) = 0;
-            virtual void train(const Mat& image);
-            template <class Iter> void train(Iter begin, Iter end);
+    void train(const std::vector<cv::Mat>& images);
 
-            virtual bool empty() const = 0;
-            virtual void clear() = 0;
+    bool empty() const;
+    void clear();
 
-            virtual void process(const Mat& src, Mat& dst) = 0;
-        };
+    void process(const cv::Mat& src, cv::Mat& dst);
 
-        template <class Iter>
-        void ImageSuperResolution::train(Iter begin, Iter end)
-        {
-            std::vector<Mat> images(begin, end);
-            train(images);
-        }
-    }
-}
+protected:
+    void calcDHF(cv::Size srcSize, const cv::Mat_<float>& M, cv::SparseMat_<double>& DHF);
+    void btvRegularization(cv::Size highResSize);
 
-#endif // __IMAGE_SUPER_RESOLUTION_HPP__
+private:
+    int scale;
+    int iterations;
+    double beta;
+    double lambda;
+    double alpha;
+    int btvKernelSize;
+    int normType;
+
+    std::vector<cv::Mat_<cv::Vec3b> > degImages;
+    std::vector<cv::SparseMat_<double> > DHFs;
+
+    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
+
+    cv::Mat_<cv::Point3d> dstVec;
+
+    std::vector<cv::Mat_<cv::Point3d> > dstVecTemp;
+    std::vector<cv::Mat_<cv::Point3d> > svec;
+    std::vector<cv::Mat_<cv::Point3d> > svec2;
+
+    cv::Mat_<cv::Point3d> regVec;
+};
+
+#endif // __BILATERAL_TOTAL_VARIATION_HPP__
