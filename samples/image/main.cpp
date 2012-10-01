@@ -44,7 +44,7 @@ using namespace cv::superres;
         tm.start(); \
         op; \
         tm.stop(); \
-        cout << msg << " Time : " << tm.getTimeMilli() << " ms" << endl; \
+        cout << msg << " Time : " << tm.getTimeSec() << " sec" << endl; \
     }
 
 namespace
@@ -91,15 +91,18 @@ namespace
     {
         const double iscale = 1.0 / scale;
 
-        Mat_<Vec3b> temp;
-        blur(src, temp, Size(scale, scale));
-
         Mat_<float> M(2, 3);
-        M << iscale, 0     , move.x * iscale,
-             0     , iscale, move.y * iscale;
+        M << 1, 0, move.x,
+             0, 1, move.y;
+
+        Mat_<Vec3b> shifted;
+        warpAffine(src, shifted, M, src.size());
+
+        Mat_<Vec3b> blurred;
+        blur(shifted, blurred, Size(scale, scale));
 
         Mat_<Vec3b> deg;
-        warpAffine(temp, deg, M, Size(src.cols * iscale, src.rows * iscale));
+        resize(blurred, deg, Size(), iscale, iscale, INTER_NEAREST);
 
         addGaussNoise(deg, 10.0);
         addSpikeNoise(deg, 500);
@@ -132,12 +135,8 @@ int main(int argc, const char* argv[])
         cerr << "Can't open image " << imageFileName << endl;
         return -1;
     }
-    imshow("gold", gold);
-    waitKey();
 
     Mat src = createDegradedImage(gold, Point2d(0,0), scale);
-    imshow("src", src);
-    waitKey();
 
     // number of input images for super resolution
     const int degImagesCount = 16;
@@ -149,12 +148,7 @@ int main(int argc, const char* argv[])
         move.y = theRNG().uniform(0.0, (double)scale);
 
         degImages[i] = createDegradedImage(gold, move, scale);
-
-        cout << i << " move : (" << move.x << ", " << move.y << ")" << endl;
-        imshow("degImage", degImages[i]);
-        waitKey();
     }
-    destroyWindow("degImage");
 
     Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION);
 
@@ -168,7 +162,13 @@ int main(int argc, const char* argv[])
     Mat bicubic;
     resize(src, bicubic, Size(), scale, scale, INTER_CUBIC);
 
+    namedWindow("gold", WINDOW_NORMAL);
+    imshow("gold", gold);
+
+    namedWindow("Super Resolution", WINDOW_NORMAL);
     imshow("Super Resolution", highResImage);
+
+    namedWindow("Bi-Cubic Interpolation", WINDOW_NORMAL);
     imshow("Bi-Cubic Interpolation", bicubic);
 
     waitKey();
