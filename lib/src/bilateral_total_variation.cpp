@@ -203,7 +203,7 @@ void BilateralTotalVariation::process(const Mat& src, Mat& dst)
         const Mat& curImage = images[i];
 
         bool ok;
-        Mat_<float> M = motionEstimator->estimate(src, curImage, &ok);
+        Mat_<float> M = motionEstimator->estimate(curImage, src, &ok);
 
         if (ok)
         {
@@ -275,40 +275,32 @@ SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Siz
     const int sizes[] = {lowResSize.area(), highResSize.area()};
     SparseMat_<double> DHF(2, sizes);
 
-    const Point2d move(M(0, 2), M(1, 2));
+    const int krad = scale / 2;
+    const int ksize = 2 * krad;
+    const double div = 1.0 / (ksize * ksize);
 
-    const double div = 1.0 / (scale * scale);
-
-    const int x1 = cvFloor(move.x + 1);
-    const int x0 = cvFloor(move.x);
-    const double a1 = move.x - x0;
-    const double a0 = 1.0 - a1;
-
-    const int y1 = cvFloor(move.y + 1);
-    const int y0 = cvFloor(move.y);
-    const double b1 = move.y - y0;
-    const double b0 = 1.0 - b1;
-
-    const int bsx = x1;
-    const int bsy = y1;
-
-    for (int I = 0, i = 0; I < highResSize.height; I += scale, ++i)
+    for (int y = 0; y < lowResSize.height; ++y)
     {
-        for (int J = 0, j = 0; J < highResSize.width; J += scale, ++j)
+        for (int x = 0; x < lowResSize.width; ++x)
         {
-            const int y = highResSize.width * I + J;
-            const int s = lowResSize.width * i + j;
+            const int lowResInd = y * lowResSize.width + x;
 
-            if (J >= bsx && J < highResSize.width - bsx - scale && I >= bsy && I < highResSize.height - bsy - scale)
+            for (int i = -krad; i <= krad; ++i)
             {
-                for (int l = 0; l < scale; ++l)
+                for (int j = -krad; j < krad; ++j)
                 {
-                    for (int k = 0; k < scale; ++k)
+                    const int Y = y * scale + i;
+                    const int X = x * scale + j;
+
+                    const double nX = M(0, 0) * X + M(0, 1) * Y + M(0, 2);
+                    const double nY = M(1, 0) * X + M(1, 1) * Y + M(1, 2);
+
+                    const int nX0 = cvFloor(nX);
+                    const int nY0 = cvFloor(nY);
+
+                    if (nX0 >= 0 && nX0 < highResSize.width && nY0 >= 0 && nY0 < highResSize.height)
                     {
-                        DHF.ref(s, y + highResSize.width * (y0 + l) + x0 + k) += a0 * b0 * div;
-                        DHF.ref(s, y + highResSize.width * (y0 + l) + x1 + k) += a1 * b0 * div;
-                        DHF.ref(s, y + highResSize.width * (y1 + l) + x0 + k) += a0 * b1 * div;
-                        DHF.ref(s, y + highResSize.width * (y1 + l) + x1 + k) += a1 * b1 * div;
+                        DHF.ref(lowResInd, nY0 * highResSize.width + nX0) += div;
                     }
                 }
             }
