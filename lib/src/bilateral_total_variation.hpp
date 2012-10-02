@@ -52,8 +52,8 @@ public:
     void process(const cv::Mat& src, cv::Mat& dst);
 
 protected:
-    void calcDHF(cv::Size srcSize, const cv::Mat_<float>& M, cv::SparseMat_<double>& DHF);
-    void btvRegularization(cv::Size highResSize);
+    cv::SparseMat_<double> calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M);
+    void calcBtvRegularization(cv::Size highResSize, const cv::Mat_<cv::Point3d>& X, cv::Mat_<cv::Point3d>& dst);
 
 private:
     int scale;
@@ -62,20 +62,10 @@ private:
     double lambda;
     double alpha;
     int btvKernelSize;
-    int normType;
-
-    std::vector<cv::Mat_<cv::Vec3b> > degImages;
-    std::vector<cv::SparseMat_<double> > DHFs;
 
     cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
 
-    cv::Mat_<cv::Point3d> dstVec;
-
-    std::vector<cv::Mat_<cv::Point3d> > dstVecTemp;
-    std::vector<cv::Mat_<cv::Point3d> > svec;
-    std::vector<cv::Mat_<cv::Point3d> > svec2;
-
-    cv::Mat_<cv::Point3d> regVec;
+    std::vector<cv::Mat> images;
 };
 
 #endif // __BILATERAL_TOTAL_VARIATION_HPP__

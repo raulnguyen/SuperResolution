@@ -81,7 +81,7 @@ namespace
 
             for (int x = 0; x < image.cols; ++x)
             {
-                if (theRNG().uniform(0 ,val) < 1)
+                if (theRNG().uniform(0, val) < 1)
                     imageRow[x] = Vec3b(255, 255, 255);
             }
         }
@@ -96,7 +96,7 @@ namespace
              0, 1, move.y;
 
         Mat_<Vec3b> shifted;
-        warpAffine(src, shifted, M, src.size());
+        warpAffine(src, shifted, M, src.size(), INTER_NEAREST);
 
         Mat_<Vec3b> blurred;
         blur(shifted, blurred, Size(scale, scale));
@@ -143,9 +143,11 @@ int main(int argc, const char* argv[])
     vector<Mat> degImages(degImagesCount);
     for (int i = 0; i < degImagesCount; ++i)
     {
+        const double dscale = scale;
+
         Point2d move;
-        move.x = theRNG().uniform(0.0, (double)scale);
-        move.y = theRNG().uniform(0.0, (double)scale);
+        move.x = theRNG().uniform(0.0, dscale);
+        move.y = theRNG().uniform(0.0, dscale);
 
         degImages[i] = createDegradedImage(gold, move, scale);
     }

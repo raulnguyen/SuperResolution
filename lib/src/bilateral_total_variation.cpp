@@ -24,6 +24,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "bilateral_total_variation.hpp"
+#include <algorithm>
 #include <opencv2/core/internal.hpp>
 
 using namespace std;
@@ -43,9 +44,7 @@ CV_INIT_ALGORITHM(BilateralTotalVariation, "ImageSuperResolution.BilateralTotalV
                   obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
                                        "Parameter of spacial distribution in btv.");
                   obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                       "Kernel size of btv filter.");
-                  obj.info()->addParam(obj, "normType", obj.normType, false, 0, 0,
-                                       "NORM_L1 or NORM_L2."));
+                                       "Kernel size of btv filter."));
 
 bool BilateralTotalVariation::init()
 {
@@ -65,7 +64,6 @@ BilateralTotalVariation::BilateralTotalVariation()
     lambda = 0.03;
     alpha = 0.7;
     btvKernelSize = 7;
-    normType = NORM_L1;
 
     Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2);
     motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
@@ -83,45 +81,50 @@ void BilateralTotalVariation::train(const vector<Mat>& images)
     }
 #endif
 
-    degImages.assign(images.begin(), images.end());
+    this->images.insert(this->images.end(), images.begin(), images.end());
 }
 
 bool BilateralTotalVariation::empty() const
 {
-    return degImages.empty();
+    return images.empty();
 }
 
 void BilateralTotalVariation::clear()
 {
-    degImages.clear();
+    images.clear();
 }
 
 namespace
 {
-    void mulSparseMat32f(const SparseMat_<double>& smat, const Mat_<Point3d>& src, Mat_<Point3d>& dst, bool isTranspose = false)
+    void mulSparseMat(const SparseMat_<double>& smat, const Mat_<Point3d>& src, Mat_<Point3d>& dst, bool isTranspose = false)
     {
-        CV_DbgAssert(src.cols == 1 && dst.cols == 1);
+        const int srcInd = isTranspose ? 1 : 0;
+        const int dstInd = isTranspose ? 0 : 1;
 
+        CV_DbgAssert(src.rows == 1);
+        CV_DbgAssert(src.cols == smat.size(srcInd));
+
+        dst.create(1, smat.size(dstInd));
         dst.setTo(Scalar::all(0));
 
-        SparseMatConstIterator_<double> it = smat.begin(), it_end = smat.end();
+        const Point3d* srcPtr = src[0];
+        Point3d* dstPtr = dst[0];
 
-        const int srcIndIdx = isTranspose ? 1 : 0;
-        const int dstIndIdx = isTranspose ? 0 : 1;
-
-        for (; it != it_end; ++it)
+        for (SparseMatConstIterator_<double> it = smat.begin(), it_end = smat.end(); it != it_end; ++it)
         {
-            const int i = it.node()->idx[srcIndIdx];
-            const int j = it.node()->idx[dstIndIdx];
+            const int i = it.node()->idx[srcInd];
+            const int j = it.node()->idx[dstInd];
 
-            CV_DbgAssert(i >= 0 && i < src.rows);
-            CV_DbgAssert(j >= 0 && j < dst.rows);
+            CV_DbgAssert(i >= 0 && i < src.cols);
+            CV_DbgAssert(j >= 0 && j < dst.cols);
 
-            dst(j, 0) += *it * src(i, 0);
+            const double w = *it;
+
+            dstPtr[j] += w * srcPtr[i];
         }
     }
 
-    Point3d sign(Point3d a, Point3d b)
+    Point3d diffSign(Point3d a, Point3d b)
     {
         return Point3d(
             a.x > b.x ? 1.0 : (a.x < b.x ? -1.0 : 0.0),
@@ -130,152 +133,149 @@ namespace
         );
     }
 
-    void subtract_sign(const Mat_<Point3d>& src1, const Mat_<Point3d>& src2, Mat_<Point3d>& dst)
+    void diffSign(const Mat_<Point3d>& src1, const Mat_<Point3d>& src2, Mat_<Point3d>& dst)
     {
+        CV_DbgAssert(src1.rows == 1);
         CV_DbgAssert(src1.size() == src2.size());
-        CV_DbgAssert(dst.size() == src1.size());
 
-        for (int y = 0; y < src1.rows; ++y)
-        {
-            const Point3d* src1Row = src1[y];
-            const Point3d* src2Row = src2[y];
-            Point3d* dstRow = dst[y];
+        dst.create(src1.size());
 
-            for (int x = 0; x < src1.cols; ++x)
-                dstRow[x] = sign(src1Row[x], src2Row[x]);
-        }
+        const Point3d* src1Ptr = src1[0];
+        const Point3d* src2Ptr = src2[0];
+        Point3d* dstPtr = dst[0];
+
+        for (int i = 0; i < src1.cols; ++i)
+            dstPtr[i] = diffSign(src1Ptr[i], src2Ptr[i]);
     }
 
     struct ProcessBody : ParallelLoopBody
     {
         void operator ()(const Range& range) const;
 
-        int normType;
-        Size lowResSize;
-
+        vector<Mat_<Point3d> >* y;
         vector<SparseMat_<double> >* DHFs;
 
-        Mat_<Point3d> dstVec;
+        Mat_<Point3d> X;
 
-        vector<Mat_<Point3d> >* dstVecTemp;
-        vector<Mat_<Point3d> >* svec;
-        vector<Mat_<Point3d> >* svec2;
+        vector<Mat_<Point3d> >* diffTerms;
+        vector<Mat_<Point3d> >* temps;
     };
 
     void ProcessBody::operator ()(const Range& range) const
     {
-        Mat_<Point3d> temp(lowResSize.area(), 1);
+        Mat_<Point3d> temp = (*temps)[range.start];
 
         for (int i = range.start; i < range.end; ++i)
         {
             // degrade current estimated image
-            mulSparseMat32f((*DHFs)[i], dstVec, (*svec2)[i]);
+            mulSparseMat((*DHFs)[i], X, temp);
 
             // compere input and degraded image
-            temp.setTo(Scalar::all(1));
-
-            if (normType == NORM_L1)
-                subtract_sign((*svec2)[i], (*svec)[i], temp);
-            else
-                subtract((*svec2)[i], (*svec)[i], temp);
+            diffSign(temp, (*y)[i], temp);
 
             // blur the subtructed vector with transposed matrix
-            mulSparseMat32f((*DHFs)[i], temp, (*dstVecTemp)[i], true);
+            mulSparseMat((*DHFs)[i], temp, (*diffTerms)[i], true);
         }
     }
 }
 
 void BilateralTotalVariation::process(const Mat& src, Mat& dst)
 {
-    CV_DbgAssert(!empty());
-    CV_DbgAssert(src.size() == degImages[0].size());
-    CV_DbgAssert(src.type() == degImages[0].type());
-    CV_DbgAssert(normType == NORM_L1 || normType == NORM_L2);
+    CV_DbgAssert(empty() || src.size() == images[0].size());
+    CV_DbgAssert(empty() || src.type() == images[0].type());
 
     const Size lowResSize = src.size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
     // calc DHF for all low-res images
 
-    DHFs.resize(degImages.size() + 1);
-    for (size_t i = 0; i < degImages.size(); ++i)
+    vector<Mat_<Point3d> > y;
+    vector<SparseMat_<double> > DHFs;
+
+    y.reserve(images.size() + 1);
+    DHFs.reserve(images.size() + 1);
+
+    y.push_back(src.reshape(src.channels(), 1));
+    DHFs.push_back(calcDHF(lowResSize, highResSize, Mat_<float>::eye(3, 3)));
+
+    for (size_t i = 0; i < images.size(); ++i)
     {
-        Mat_<float> M = motionEstimator->estimate(src, degImages[i]);
-        calcDHF(lowResSize, M, DHFs[i]);
+        const Mat& curImage = images[i];
+
+        bool ok;
+        Mat_<float> M = motionEstimator->estimate(src, curImage, &ok);
+
+        if (ok)
+        {
+            M(0, 2) *= scale;
+            M(1, 2) *= scale;
+
+            y.push_back(curImage.reshape(curImage.channels(), 1));
+            DHFs.push_back(calcDHF(lowResSize, highResSize, M));
+        }
     }
 
-    degImages.push_back(src);
-    calcDHF(lowResSize, Mat_<float>::eye(3, 3), DHFs.back());
+    Mat_<Point3d> X(1, highResSize.area());
+    vector<Mat_<Point3d> > diffTerms(y.size());
+    vector<Mat_<Point3d> > temps(y.size());
+    Mat_<Point3d> regTerm;
 
-    // create initial image by simple linear interpolation
+    // create initial image by simple bi-cubic interpolation
 
-    resize(src, dst, highResSize);
-
-    // convert Mat image structure to 1D vecor structure
-
-    dst.reshape(3, highResSize.area()).convertTo(dstVec, dstVec.depth());
-
-    dstVecTemp.resize(degImages.size());
-    svec.resize(degImages.size());
-    svec2.resize(degImages.size());
-
-    for (size_t i = 0; i < degImages.size(); ++i)
     {
-        degImages[i].reshape(3, lowResSize.area()).convertTo(svec[i], svec[i].depth());
-        degImages[i].reshape(3, lowResSize.area()).convertTo(svec2[i], svec2[i].depth());
-        dstVec.copyTo(dstVecTemp[i]);
+        Mat_<Point3d> lowResImage(lowResSize.height, lowResSize.width, y.front()[0]);
+        Mat_<Point3d> highResImage(highResSize.height, highResSize.width, X[0]);
+        resize(lowResImage, highResImage, highResSize, 0, 0, INTER_CUBIC);
     }
-
-    regVec.create(highResSize.area(), 1);
-    regVec.setTo(Scalar::all(0));
 
     // steepest descent method for L1 norm minimization
+
     for (int i = 0; i < iterations; ++i)
     {
-        // btv
-        if (lambda > 0)
-            btvRegularization(highResSize);
+        // diff terms
 
         {
             ProcessBody body;
 
-            body.normType = normType;
-            body.lowResSize = lowResSize;
+            body.y = &y;
             body.DHFs = &DHFs;
-            body.dstVec = dstVec;
-            body.dstVecTemp = &dstVecTemp;
-            body.svec = &svec;
-            body.svec2 = &svec2;
+            body.X = X;
+            body.diffTerms = &diffTerms;
+            body.temps = &temps;
 
-            parallel_for_(Range(0, degImages.size()), body);
+            parallel_for_(Range(0, y.size()), body);
         }
 
+        // regularization term
+
+        if (lambda > 0)
+            calcBtvRegularization(highResSize, X, regTerm);
+
         // creep ideal image, beta is parameter of the creeping speed.
-        // add transeposed difference vector.
-        for (size_t n = 0; n < degImages.size(); ++n)
-            addWeighted(dstVec, 1.0, dstVecTemp[n], -beta, 0.0, dstVec);
+
+        for (size_t n = 0; n < y.size(); ++n)
+            addWeighted(X, 1.0, diffTerms[n], -beta, 0.0, X);
 
         // add smoothness term
+
         if (lambda > 0.0)
-            addWeighted(dstVec, 1.0, regVec, -beta  *lambda, 0.0, dstVec);
+            addWeighted(X, 1.0, regTerm, -beta * lambda, 0.0, X);
     }
 
     // re-convert 1D vecor structure to Mat image structure
-    dstVec.reshape(3, highResSize.height).convertTo(dst, CV_8UC3);
+    X.reshape(X.channels(), highResSize.height).convertTo(dst, CV_8UC(X.channels()));
 }
 
-void BilateralTotalVariation::calcDHF(Size lowResSize, const Mat_<float>& M, SparseMat_<double>& DHF)
+SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M)
 {
     // D down sampling matrix.
     // H blur matrix, in this case, we use only ccd sampling blur.
     // F motion matrix, in this case, threr is only global shift motion.
 
-    const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
-
     const int sizes[] = {highResSize.area(), lowResSize.area()};
-    DHF.create(2, sizes);
+    SparseMat_<double> DHF(2, sizes);
 
-    const Point2d move(M(0, 2) * scale, M(1, 2) * scale);
+    const Point2d move(M(0, 2), M(1, 2));
 
     const double div = 1.0 / (scale * scale);
 
@@ -314,6 +314,8 @@ void BilateralTotalVariation::calcDHF(Size lowResSize, const Mat_<float>& M, Spa
             }
         }
     }
+
+    return DHF;
 }
 
 namespace
@@ -333,13 +335,12 @@ namespace
     {
         for (int i = range.start; i < range.end; ++i)
         {
-            Point3d* dstRow = dst[i];
-
             const Point3d* srcRow = src[i];
+            Point3d* dstRow = dst[i];
 
             for(int j = kw; j < src.cols - kw; ++j)
             {
-                Point3d dstVal(0,0,0);
+                Point3d dstVal(0, 0, 0);
 
                 const Point3d srcVal = srcRow[j];
 
@@ -349,7 +350,7 @@ namespace
                     const Point3d* srcRow3 = src[i + m];
 
                     for (int l = kw; l + m >= 0; --l, ++count)
-                        dstVal += weight[count] * (sign(srcVal, srcRow3[j + l]) - sign(srcRow2[j - l], srcVal));
+                        dstVal += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
                 }
 
                 dstRow[j] = dstVal;
@@ -358,13 +359,14 @@ namespace
     }
 }
 
-// btvregularization(dstVec,reg_window,alpha,reg_vec,dest.size());
-// btvregularization(Mat& srcVec, Size kernel, float alpha, Mat& dstVec, Size size)
-
-void BilateralTotalVariation::btvRegularization(Size highResSize)
+void BilateralTotalVariation::calcBtvRegularization(Size highResSize, const Mat_<cv::Point3d>& X_, Mat_<cv::Point3d>& dst_)
 {
-    const Mat_<Point3d> src = dstVec.reshape(3, highResSize.height);
-    Mat_<Point3d> dst = regVec.reshape(3, highResSize.height);
+    CV_DbgAssert(X_.rows == 1 && X_.cols == highResSize.area());
+
+    dst_.create(X_.size());
+
+    const Mat_<Point3d> src = X_.reshape(X_.channels(), highResSize.height);
+    Mat_<Point3d> dst = dst_.reshape(dst_.channels(), highResSize.height);
 
     const int kw = (btvKernelSize - 1) / 2;
     const int kh = (btvKernelSize - 1) / 2;
@@ -377,16 +379,13 @@ void BilateralTotalVariation::btvRegularization(Size highResSize)
             weight[count] = pow(alpha, abs(m) + abs(l));
     }
 
-    // a part of under term of Eq (22) lambda*\sum\sum ...
-    {
-        BtvRegularizationBody body;
+    BtvRegularizationBody body;
 
-        body.src = src;
-        body.dst = dst;
-        body.kw = kw;
-        body.kh = kh;
-        body.weight = weight;
+    body.src = src;
+    body.dst = dst;
+    body.kw = kw;
+    body.kh = kh;
+    body.weight = weight;
 
-        parallel_for_(Range(kh, src.rows - kh), body);
-    }
+    parallel_for_(Range(kh, src.rows - kh), body);
 }
