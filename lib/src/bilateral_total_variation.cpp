@@ -98,8 +98,8 @@ namespace
 {
     void mulSparseMat(const SparseMat_<double>& smat, const Mat_<Point3d>& src, Mat_<Point3d>& dst, bool isTranspose = false)
     {
-        const int srcInd = isTranspose ? 1 : 0;
-        const int dstInd = isTranspose ? 0 : 1;
+        const int srcInd = isTranspose ? 0 : 1;
+        const int dstInd = isTranspose ? 1 : 0;
 
         CV_DbgAssert(src.rows == 1);
         CV_DbgAssert(src.cols == smat.size(srcInd));
@@ -272,7 +272,7 @@ SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Siz
     // H blur matrix, in this case, we use only ccd sampling blur.
     // F motion matrix, in this case, threr is only global shift motion.
 
-    const int sizes[] = {highResSize.area(), lowResSize.area()};
+    const int sizes[] = {lowResSize.area(), highResSize.area()};
     SparseMat_<double> DHF(2, sizes);
 
     const Point2d move(M(0, 2), M(1, 2));
@@ -305,10 +305,10 @@ SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Siz
                 {
                     for (int k = 0; k < scale; ++k)
                     {
-                        DHF.ref(y + highResSize.width * (y0 + l) + x0 + k, s) += a0 * b0 * div;
-                        DHF.ref(y + highResSize.width * (y0 + l) + x1 + k, s) += a1 * b0 * div;
-                        DHF.ref(y + highResSize.width * (y1 + l) + x0 + k, s) += a0 * b1 * div;
-                        DHF.ref(y + highResSize.width * (y1 + l) + x1 + k, s) += a1 * b1 * div;
+                        DHF.ref(s, y + highResSize.width * (y0 + l) + x0 + k) += a0 * b0 * div;
+                        DHF.ref(s, y + highResSize.width * (y0 + l) + x1 + k) += a1 * b0 * div;
+                        DHF.ref(s, y + highResSize.width * (y1 + l) + x0 + k) += a0 * b1 * div;
+                        DHF.ref(s, y + highResSize.width * (y1 + l) + x1 + k) += a1 * b1 * div;
                     }
                 }
             }
