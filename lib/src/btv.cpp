@@ -23,8 +23,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "bilateral_total_variation.hpp"
-#include <algorithm>
+#include "btv.hpp"
 #include <opencv2/core/internal.hpp>
 
 using namespace std;
@@ -32,31 +31,37 @@ using namespace cv;
 using namespace cv::superres;
 using namespace cv::videostab;
 
-CV_INIT_ALGORITHM(BilateralTotalVariation, "ImageSuperResolution.BilateralTotalVariation",
-                  obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
-                                       "Scale factor.");
-                  obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
-                                       "Iteration count.");
-                  obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
-                                       "Asymptotic value of steepest descent method.");
-                  obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
-                                       "Weight parameter to balance data term and smoothness term.");
-                  obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
-                                       "Parameter of spacial distribution in btv.");
-                  obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                       "Kernel size of btv filter."));
+namespace cv
+{
+    namespace superres
+    {
+        CV_INIT_ALGORITHM(BilateralTotalVariation, "ImageSuperResolution.BilateralTotalVariation",
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                               "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
+                                               "Iteration count.");
+                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
+                                               "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
+                                               "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
+                                               "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
+                                               "Kernel size of btv filter."));
+    }
+}
 
-bool BilateralTotalVariation::init()
+bool cv::superres::BilateralTotalVariation::init()
 {
     return !BilateralTotalVariation_info_auto.name().empty();
 }
 
-Ptr<ImageSuperResolution> BilateralTotalVariation::create()
+Ptr<ImageSuperResolution> cv::superres::BilateralTotalVariation::create()
 {
     return Ptr<ImageSuperResolution>(new BilateralTotalVariation);
 }
 
-BilateralTotalVariation::BilateralTotalVariation()
+cv::superres::BilateralTotalVariation::BilateralTotalVariation()
 {
     scale = 4;
     iterations = 180;
@@ -69,27 +74,48 @@ BilateralTotalVariation::BilateralTotalVariation()
     motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
 }
 
-void BilateralTotalVariation::train(const vector<Mat>& images)
+void cv::superres::BilateralTotalVariation::train(InputArrayOfArrays _images)
+{
+    vector<Mat> images;
+
+    if (_images.kind() == _InputArray::STD_VECTOR_MAT)
+        _images.getMatVector(images);
+    else
+    {
+        Mat image = _images.getMat();
+        images.push_back(image);
+    }
+
+    trainImpl(images);
+}
+
+void cv::superres::BilateralTotalVariation::trainImpl(const vector<Mat>& images)
 {
 #ifdef _DEBUG
     CV_DbgAssert(!images.empty());
     CV_DbgAssert(images[0].type() == CV_8UC3);
+
     for (size_t i = 1; i < images.size(); ++i)
     {
         CV_DbgAssert(images[i].size() == images[0].size());
         CV_DbgAssert(images[i].type() == images[0].type());
+    }
+
+    if (!this->images.empty())
+    {
+        CV_DbgAssert(images[0].size() == this->images[0].size());
     }
 #endif
 
     this->images.insert(this->images.end(), images.begin(), images.end());
 }
 
-bool BilateralTotalVariation::empty() const
+bool cv::superres::BilateralTotalVariation::empty() const
 {
     return images.empty();
 }
 
-void BilateralTotalVariation::clear()
+void cv::superres::BilateralTotalVariation::clear()
 {
     images.clear();
 }
@@ -179,8 +205,10 @@ namespace
     }
 }
 
-void BilateralTotalVariation::process(const Mat& src, Mat& dst)
+void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray _dst)
 {
+    Mat src = _src.getMat();
+
     CV_DbgAssert(empty() || src.size() == images[0].size());
     CV_DbgAssert(empty() || src.type() == images[0].type());
 
@@ -263,10 +291,10 @@ void BilateralTotalVariation::process(const Mat& src, Mat& dst)
     }
 
     // re-convert 1D vecor structure to Mat image structure
-    X.reshape(X.channels(), highResSize.height).convertTo(dst, CV_8UC(X.channels()));
+    X.reshape(X.channels(), highResSize.height).convertTo(_dst, CV_8UC(X.channels()));
 }
 
-SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M)
+SparseMat_<double> cv::superres::BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M)
 {
     // D - down sampling matrix.
     // H - blur matrix, in this case, we use only ccd sampling blur.
@@ -351,7 +379,7 @@ namespace
     }
 }
 
-void BilateralTotalVariation::calcBtvRegularization(Size highResSize, const Mat_<cv::Point3d>& X_, Mat_<cv::Point3d>& dst_)
+void cv::superres::BilateralTotalVariation::calcBtvRegularization(Size highResSize, const Mat_<cv::Point3d>& X_, Mat_<cv::Point3d>& dst_)
 {
     CV_DbgAssert(X_.rows == 1 && X_.cols == highResSize.area());
 
@@ -368,7 +396,7 @@ void BilateralTotalVariation::calcBtvRegularization(Size highResSize, const Mat_
     for (int m = 0, count = 0; m <= kh; ++m)
     {
         for (int l = kw; l + m >= 0; --l, ++count)
-            weight[count] = pow(alpha, abs(m) + abs(l));
+            weight[count] = pow(alpha, std::abs(m) + std::abs(l));
     }
 
     BtvRegularizationBody body;

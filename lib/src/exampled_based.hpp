@@ -28,51 +28,67 @@
 #ifndef __EXAMPLED_BASED_HPP__
 #define __EXAMPLED_BASED_HPP__
 
+#include <vector>
 #include <opencv2/features2d/features2d.hpp>
+#ifdef WITH_TESTS
+    #include <opencv2/ts/ts_gtest.h>
+#endif
 #include "image_super_resolution.hpp"
 #include "super_resolution_export.h"
 
-// W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
-class SUPER_RESOLUTION_NO_EXPORT ExampledBased : public cv::superres::ImageSuperResolution
+namespace cv
 {
-public:
-    static bool init();
-    static cv::Ptr<ImageSuperResolution> create();
+    namespace superres
+    {
+        // W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
+        class SUPER_RESOLUTION_NO_EXPORT ExampledBased : public ImageSuperResolution
+        {
+        public:
+            static bool init();
+            static Ptr<ImageSuperResolution> create();
 
-    cv::AlgorithmInfo* info() const;
+            AlgorithmInfo* info() const;
 
-    ExampledBased();
+            ExampledBased();
 
-    void train(const std::vector<cv::Mat>& images);
-    void train(const cv::Mat& image);
+            void train(InputArrayOfArrays images);
 
-    void write(cv::FileStorage& fs) const;
-    void read(const cv::FileNode& fn);
+            bool empty() const;
+            void clear();
 
-    bool empty() const;
-    void clear();
+            void process(InputArray src, OutputArray dst);
 
-    void process(const cv::Mat& src, cv::Mat& dst);
+            void write(FileStorage& fs) const;
+            void read(const FileNode& fn);
 
-protected:
-    void buildPatchLists(const cv::Mat& src, cv::Mat& lowResPatches, cv::Mat& highResPatches);
+        protected:
+            void trainImpl(const std::vector<Mat>& images);
+            void buildPatchList(const Mat& src, Mat& lowResPatches, Mat& highResPatches);
 
-private:
-    double scale;
+        private:
+            double scale;
 
-    double patchStep;
+            double patchStep;
+            int trainInterpolation;
 
-    int lowResPatchSize;
-    int highResPatchSize;
+            int lowResPatchSize;
+            int highResPatchSize;
 
-    double stdDevThresh;
+            double stdDevThresh;
 
-    cv::Ptr<cv::DescriptorMatcher> matcher;
+            bool saveTrainBase;
 
-    bool saveTrainBase;
+            Ptr<DescriptorMatcher> matcher;
 
-    cv::Mat lowResPatches;
-    cv::Mat highResPatches;
-};
+            std::vector<Mat> lowResPatches;
+            std::vector<Mat> highResPatches;
+
+            #ifdef WITH_TESTS
+                FRIEND_TEST(ExampledBased, BuildPatchList);
+                FRIEND_TEST(ExampledBased, ReadWriteConsistency);
+            #endif
+        };
+    }
+}
 
 #endif

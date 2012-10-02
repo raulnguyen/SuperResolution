@@ -25,47 +25,55 @@
 
 #pragma once
 
-#ifndef __BILATERAL_TOTAL_VARIATION_HPP__
-#define __BILATERAL_TOTAL_VARIATION_HPP__
+#ifndef __BTV_HPP__
+#define __BTV_HPP__
 
+#include <vector>
 #include <opencv2/videostab/global_motion.hpp>
 #include "image_super_resolution.hpp"
 #include "super_resolution_export.h"
 
-// S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-// Thanks to https://github.com/Palethorn/SuperResolution implementation.
-class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public cv::superres::ImageSuperResolution
+namespace cv
 {
-public:
-    static bool init();
-    static cv::Ptr<ImageSuperResolution> create();
+    namespace superres
+    {
+        // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
+        // Thanks to https://github.com/Palethorn/SuperResolution implementation.
+        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public ImageSuperResolution
+        {
+        public:
+            static bool init();
+            static Ptr<ImageSuperResolution> create();
 
-    cv::AlgorithmInfo* info() const;
+            AlgorithmInfo* info() const;
 
-    BilateralTotalVariation();
+            BilateralTotalVariation();
 
-    void train(const std::vector<cv::Mat>& images);
+            void train(InputArrayOfArrays images);
 
-    bool empty() const;
-    void clear();
+            bool empty() const;
+            void clear();
 
-    void process(const cv::Mat& src, cv::Mat& dst);
+            void process(InputArray src, OutputArray dst);
 
-protected:
-    cv::SparseMat_<double> calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M);
-    void calcBtvRegularization(cv::Size highResSize, const cv::Mat_<cv::Point3d>& X, cv::Mat_<cv::Point3d>& dst);
+        protected:
+            void trainImpl(const std::vector<Mat>& images);
+            SparseMat_<double> calcDHF(Size lowResSize, Size highResSize, const Mat_<float>& M);
+            void calcBtvRegularization(Size highResSize, const Mat_<Point3d>& X, Mat_<Point3d>& dst);
 
-private:
-    int scale;
-    int iterations;
-    double beta;
-    double lambda;
-    double alpha;
-    int btvKernelSize;
+        private:
+            int scale;
+            int iterations;
+            double beta;
+            double lambda;
+            double alpha;
+            int btvKernelSize;
 
-    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
+            Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
 
-    std::vector<cv::Mat> images;
-};
+            std::vector<Mat> images;
+        };
+    }
+}
 
-#endif // __BILATERAL_TOTAL_VARIATION_HPP__
+#endif // __BTV_HPP__

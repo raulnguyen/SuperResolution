@@ -49,7 +49,7 @@ using namespace cv::superres;
 
 namespace
 {
-    void addGaussNoise(Mat_<Vec3b>& image, double sigma)
+    void addGaussNoise(Mat& image, double sigma)
     {
         Mat_<float> noise(image.size());
 
@@ -73,35 +73,38 @@ namespace
         merge(channels, image);
     }
 
-    void addSpikeNoise(Mat_<Vec3b>& image, int val)
+    void addSpikeNoise(Mat& image, int frequency)
     {
-        for (int y = 0; y < image.rows; ++y)
-        {
-            Vec3b* imageRow = image[y];
+        Mat_<uchar> mask(image.size(), 0);
 
-            for (int x = 0; x < image.cols; ++x)
+        for (int y = 0; y < mask.rows; ++y)
+        {
+            for (int x = 0; x < mask.cols; ++x)
             {
-                if (theRNG().uniform(0, val) < 1)
-                    imageRow[x] = Vec3b(255, 255, 255);
+                if (theRNG().uniform(0, frequency) < 1)
+                    mask(y, x) = 255;
             }
         }
+
+        Scalar val = image.depth() >= CV_32F ? Scalar::all(1) : Scalar::all(255);
+        image.setTo(val, mask);
     }
 
-    Mat createDegradedImage(const Mat& src, Point2d move, int scale)
+    Mat createDegradedImage(const Mat& src, Point2d move, double theta, int scale)
     {
         const double iscale = 1.0 / scale;
 
         Mat_<float> M(2, 3);
-        M << 1, 0, move.x,
-             0, 1, move.y;
+        M << cos(theta), -sin(theta), move.x,
+             sin(theta),  cos(theta), move.y;
 
-        Mat_<Vec3b> shifted;
+        Mat shifted;
         warpAffine(src, shifted, M, src.size(), INTER_NEAREST);
 
-        Mat_<Vec3b> blurred;
+        Mat blurred;
         blur(shifted, blurred, Size(scale, scale));
 
-        Mat_<Vec3b> deg;
+        Mat deg;
         resize(blurred, deg, Size(), iscale, iscale, INTER_NEAREST);
 
         addGaussNoise(deg, 10.0);
@@ -136,7 +139,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    Mat src = createDegradedImage(gold, Point2d(0,0), scale);
+    Mat src = createDegradedImage(gold, Point2d(0, 0), 0, scale);
 
     // number of input images for super resolution
     const int degImagesCount = 16;
@@ -146,10 +149,12 @@ int main(int argc, const char* argv[])
         const double dscale = scale;
 
         Point2d move;
-        move.x = theRNG().uniform(0.0, dscale);
-        move.y = theRNG().uniform(0.0, dscale);
+        move.x = theRNG().uniform(-dscale, dscale);
+        move.y = theRNG().uniform(-dscale, dscale);
 
-        degImages[i] = createDegradedImage(gold, move, scale);
+        const double theta = theRNG().uniform(0.0, CV_PI/10);
+
+        degImages[i] = createDegradedImage(gold, move, theta, scale);
     }
 
     Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION);

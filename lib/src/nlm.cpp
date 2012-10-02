@@ -23,7 +23,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "nlm_based.hpp"
+#include "nlm.hpp"
 #include <opencv2/core/internal.hpp>
 #include "extract_patch.hpp"
 
@@ -31,7 +31,7 @@ using namespace std;
 using namespace cv;
 using namespace cv::superres;
 
-CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
+CV_INIT_ALGORITHM(Nlm, "VideoSuperResolution.Nlm",
                   obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                        "Scale factor.");
                   obj.info()->addParam(obj, "searchWindowRadius", obj.searchWindowRadius, false, 0, 0,
@@ -45,17 +45,17 @@ CV_INIT_ALGORITHM(NlmBased, "VideoSuperResolution.NlmBased",
                   obj.info()->addParam(obj, "doDeblurring", obj.doDeblurring, false, 0, 0,
                                        "Perform deblurring operation"));
 
-bool NlmBased::init()
+bool Nlm::init()
 {
-    return !NlmBased_info_auto.name().empty();
+    return !Nlm_info_auto.name().empty();
 }
 
-Ptr<VideoSuperResolution> NlmBased::create()
+Ptr<VideoSuperResolution> Nlm::create()
 {
-    return Ptr<VideoSuperResolution>(new NlmBased);
+    return Ptr<VideoSuperResolution>(new Nlm);
 }
 
-NlmBased::NlmBased()
+Nlm::Nlm()
 {
     scale = 2;
     searchWindowRadius = 10;
@@ -174,7 +174,7 @@ namespace
     }
 }
 
-void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
+void Nlm::initImpl(cv::Ptr<IFrameSource>& frameSource)
 {
     deblurer->setRadius(temporalAreaRadius);
 
@@ -221,7 +221,7 @@ void NlmBased::initImpl(cv::Ptr<IFrameSource>& frameSource)
     }
 }
 
-Mat NlmBased::processImpl(const Mat& frame)
+Mat Nlm::processImpl(const Mat& frame)
 {
     addNewFrame(frame);
 
@@ -250,7 +250,7 @@ Mat NlmBased::processImpl(const Mat& frame)
     return at(outPos, outFrames);
 }
 
-void NlmBased::processFrame(int idx)
+void Nlm::processFrame(int idx)
 {
     at(idx, Y).convertTo(V, V.depth());
     W.create(V.size());
@@ -281,7 +281,7 @@ void NlmBased::processFrame(int idx)
     cvtColor(at(idx, Y), at(idx, outFrames), COLOR_Lab2LBGR);
 }
 
-void NlmBased::addNewFrame(const cv::Mat& frame)
+void Nlm::addNewFrame(const cv::Mat& frame)
 {
     CV_DbgAssert(frame.type() == CV_8UC3);
     CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, y).size());

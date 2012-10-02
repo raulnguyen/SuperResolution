@@ -24,39 +24,45 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "extract_patch.hpp"
-
 #ifdef WITH_TESTS
-#include <opencv2/ts/ts_gtest.h>
+    #include <opencv2/ts/ts_gtest.h>
 #endif
 
 using namespace std;
 using namespace cv;
+using namespace cv::superres;
 
 ///////////////////////////////////////////////////////////////
 // Tests
 
 #ifdef WITH_TESTS
 
-TEST(ExtractPatch, Identical)
+namespace cv
 {
-    Mat src(100, 100, CV_8UC3);
+    namespace superres
+    {
+        TEST(ExtractPatch, Identical)
+        {
+            Mat src(100, 100, CV_8UC3);
 
-    theRNG().fill(src, RNG::UNIFORM, 0, 255);
+            theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
-    const Point loc(src.cols / 2, src.rows / 2);
-    const int patchSize = 21;
+            const Point loc(src.cols / 2, src.rows / 2);
+            const int patchSize = 21;
 
-    vector<uchar> patch1Vec;
-    extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);
+            vector<uchar> patch1Vec;
+            extractPatch(src, loc, patch1Vec, patchSize, INTER_NEAREST);
 
-    ASSERT_EQ(patchSize * patchSize * 3, patch1Vec.size());
+            ASSERT_EQ(patchSize * patchSize * 3, patch1Vec.size());
 
-    Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
+            Mat_<Vec3b> patch1(patchSize, patchSize, (Vec3b*) &patch1Vec[0]);
 
-    Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize / 2);
+            Mat_<Vec3b> patch2 = extractPatch(src, loc, patchSize / 2);
 
-    double diff = norm(patch1, patch2, NORM_INF);
-    EXPECT_EQ(diff, 0.0);
+            double diff = norm(patch1, patch2, NORM_INF);
+            EXPECT_EQ(diff, 0.0);
+        }
+    }
 }
 
 #endif // WITH_TESTS

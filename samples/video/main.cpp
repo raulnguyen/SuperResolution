@@ -56,7 +56,7 @@ int main(int argc, const char* argv[])
     const string inputVideoName = cmd.get<string>("video");
     const int scale = cmd.get<int>("scale");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM_BASED);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM);
     superRes->set("scale", scale);
 
     Ptr<IFrameSource> videoSource(new VideoFileSource(inputVideoName));

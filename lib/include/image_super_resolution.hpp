@@ -28,8 +28,6 @@
 #ifndef __IMAGE_SUPER_RESOLUTION_HPP__
 #define __IMAGE_SUPER_RESOLUTION_HPP__
 
-#include <string>
-#include <vector>
 #include <opencv2/core/core.hpp>
 #include "super_resolution_export.h"
 
@@ -51,22 +49,13 @@ namespace cv
 
             virtual ~ImageSuperResolution();
 
-            virtual void train(const std::vector<Mat>& images) = 0;
-            virtual void train(const Mat& image);
-            template <class Iter> void train(Iter begin, Iter end);
+            virtual void train(InputArrayOfArrays images) = 0;
 
             virtual bool empty() const = 0;
             virtual void clear() = 0;
 
-            virtual void process(const Mat& src, Mat& dst) = 0;
+            virtual void process(InputArray src, OutputArray dst) = 0;
         };
-
-        template <class Iter>
-        void ImageSuperResolution::train(Iter begin, Iter end)
-        {
-            std::vector<Mat> images(begin, end);
-            train(images);
-        }
     }
 }
 

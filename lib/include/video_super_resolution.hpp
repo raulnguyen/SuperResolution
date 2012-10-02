@@ -40,7 +40,7 @@ namespace cv
 
         enum VideoSRMethod
         {
-            VIDEO_SR_NLM_BASED,
+            VIDEO_SR_NLM,
             VIDEO_SR_METHOD_MAX
         };
 

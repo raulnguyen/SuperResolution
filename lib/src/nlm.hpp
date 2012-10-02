@@ -25,15 +25,15 @@
 
 #pragma once
 
-#ifndef __NLM_BASED_HPP__
-#define __NLM_BASED_HPP__
+#ifndef __NLM_HPP__
+#define __NLM_HPP__
 
 #include <vector>
 #include "video_super_resolution.hpp"
 #include "super_resolution_export.h"
 
 // M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
-class SUPER_RESOLUTION_NO_EXPORT NlmBased : public cv::superres::VideoSuperResolution
+class SUPER_RESOLUTION_NO_EXPORT Nlm : public cv::superres::VideoSuperResolution
 {
 public:
     static bool init();
@@ -41,7 +41,7 @@ public:
 
     cv::AlgorithmInfo* info() const;
 
-    NlmBased();
+    Nlm();
 
 protected:
     void initImpl(cv::Ptr<IFrameSource>& frameSource);
@@ -79,4 +79,4 @@ private:
     std::vector<float> blurrinessRates;
 };
 
-#endif // __NLM_BASED_HPP__
+#endif // __NLM_HPP__

@@ -25,8 +25,8 @@
 
 #include "super_resolution.hpp"
 #include "exampled_based.hpp"
-#include "bilateral_total_variation.hpp"
-#include "nlm_based.hpp"
+#include "btv.hpp"
+#include "nlm.hpp"
 
 using namespace std;
 using namespace cv;
@@ -39,7 +39,7 @@ bool cv::superres::initModule_superres()
     all &= ExampledBased::init();
     all &= BilateralTotalVariation::init();
 
-    all &= NlmBased::init();
+    all &= Nlm::init();
 
     return all;
 }
@@ -65,13 +65,6 @@ cv::superres::ImageSuperResolution::~ImageSuperResolution()
 {
 }
 
-void cv::superres::ImageSuperResolution::train(const Mat& image)
-{
-    vector<Mat> images(1);
-    images[0] = image;
-    train(images);
-}
-
 ////////////////////////////////////////////////////
 // VideoSuperResolution
 
@@ -80,10 +73,10 @@ Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMeth
     typedef Ptr<VideoSuperResolution> (*func_t)();
     static const func_t funcs[] =
     {
-        NlmBased::create
+        Nlm::create
     };
 
-    CV_DbgAssert(method >= VIDEO_SR_NLM_BASED && method < VIDEO_SR_METHOD_MAX);
+    CV_DbgAssert(method >= VIDEO_SR_NLM && method < VIDEO_SR_METHOD_MAX);
 
     return funcs[method]();
 }
