@@ -268,15 +268,15 @@ void BilateralTotalVariation::process(const Mat& src, Mat& dst)
 
 SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M)
 {
-    // D down sampling matrix.
-    // H blur matrix, in this case, we use only ccd sampling blur.
-    // F motion matrix, in this case, threr is only global shift motion.
+    // D - down sampling matrix.
+    // H - blur matrix, in this case, we use only ccd sampling blur.
+    // F - motion matrix, in this case, we use only affine motion.
 
     const int sizes[] = {lowResSize.area(), highResSize.area()};
     SparseMat_<double> DHF(2, sizes);
 
-    const int krad = scale / 2;
-    const int ksize = 2 * krad;
+    const int ksize = scale;
+    const int anchor = ksize / 2;
     const double div = 1.0 / (ksize * ksize);
 
     for (int y = 0; y < lowResSize.height; ++y)
@@ -285,12 +285,12 @@ SparseMat_<double> BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Siz
         {
             const int lowResInd = y * lowResSize.width + x;
 
-            for (int i = -krad; i <= krad; ++i)
+            for (int i = 0; i < ksize; ++i)
             {
-                for (int j = -krad; j < krad; ++j)
+                for (int j = 0; j < ksize; ++j)
                 {
-                    const int Y = y * scale + i;
-                    const int X = x * scale + j;
+                    const int Y = y * scale + i - anchor;
+                    const int X = x * scale + j - anchor;
 
                     const double nX = M(0, 0) * X + M(0, 1) * Y + M(0, 2);
                     const double nY = M(1, 0) * X + M(1, 1) * Y + M(1, 2);
