@@ -25,6 +25,10 @@
 
 #include "btv.hpp"
 #include <opencv2/core/internal.hpp>
+#ifdef WITH_TESTS
+    #include <opencv2/ts/ts_gtest.h>
+#endif
+
 
 using namespace std;
 using namespace cv;
@@ -122,21 +126,34 @@ void cv::superres::BilateralTotalVariation::clear()
 
 namespace
 {
-    void mulSparseMat(const SparseMat_<double>& smat, const Mat_<Point3d>& src, Mat_<Point3d>& dst, bool isTranspose = false)
+    template <typename T, int cn> struct VecTraits;
+    template <typename T> struct VecTraits<T, 1>
     {
+        typedef T vec_t;
+    };
+    template <typename T> struct VecTraits<T, 3>
+    {
+        typedef Point3_<T> vec_t;
+    };
+
+    template <typename T, int cn>
+    void mulSparseMatImpl(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose)
+    {
+        typedef typename VecTraits<T, cn>::vec_t vec_t;
+
         const int srcInd = isTranspose ? 0 : 1;
         const int dstInd = isTranspose ? 1 : 0;
 
         CV_DbgAssert(src.rows == 1);
         CV_DbgAssert(src.cols == smat.size(srcInd));
 
-        dst.create(1, smat.size(dstInd));
+        dst.create(1, smat.size(dstInd), src.type());
         dst.setTo(Scalar::all(0));
 
-        const Point3d* srcPtr = src[0];
-        Point3d* dstPtr = dst[0];
+        const vec_t* srcPtr = src.ptr<vec_t>();
+        vec_t* dstPtr = dst.ptr<vec_t>();
 
-        for (SparseMatConstIterator_<double> it = smat.begin(), it_end = smat.end(); it != it_end; ++it)
+        for (SparseMatConstIterator it = smat.begin(), it_end = smat.end(); it != it_end; ++it)
         {
             const int i = it.node()->idx[srcInd];
             const int j = it.node()->idx[dstInd];
@@ -144,34 +161,91 @@ namespace
             CV_DbgAssert(i >= 0 && i < src.cols);
             CV_DbgAssert(j >= 0 && j < dst.cols);
 
-            const double w = *it;
+            const double w = it.value<T>();
 
             dstPtr[j] += w * srcPtr[i];
         }
     }
 
-    Point3d diffSign(Point3d a, Point3d b)
+    void mulSparseMat(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose = false)
     {
-        return Point3d(
-            a.x > b.x ? 1.0 : (a.x < b.x ? -1.0 : 0.0),
-            a.y > b.y ? 1.0 : (a.y < b.y ? -1.0 : 0.0),
-            a.z > b.z ? 1.0 : (a.z < b.z ? -1.0 : 0.0)
+        typedef void (*func_t)(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose);
+        static const func_t funcs[2][2] =
+        {
+            {mulSparseMatImpl<float, 1>, mulSparseMatImpl<float, 3>},
+            {mulSparseMatImpl<double, 1>, mulSparseMatImpl<double, 3>}
+        };
+
+        CV_DbgAssert(smat.depth() == src.depth());
+        CV_DbgAssert(src.channels() == 1 || src.channels() == 3);
+
+        const func_t func = funcs[smat.depth() == CV_64F][src.channels() == 3];
+
+        func(smat, src, dst, isTranspose);
+    }
+
+    template <typename T>
+    T diffSign(T a, T b)
+    {
+        return a > b ? 1 : a < b ? -1 : 0;
+    }
+    template <typename T>
+    Point3_<T> diffSign(Point3_<T> a, Point3_<T> b)
+    {
+        return Point3_<T>(
+            a.x > b.x ? 1 : a.x < b.x ? -1 : 0,
+            a.y > b.y ? 1 : a.y < b.y ? -1 : 0,
+            a.z > b.z ? 1 : a.z < b.z ? -1 : 0
         );
     }
 
-    void diffSign(const Mat_<Point3d>& src1, const Mat_<Point3d>& src2, Mat_<Point3d>& dst)
+    template <typename T>
+    void diffSignImpl(const Mat& src1, const Mat& src2, Mat& dst)
     {
-        CV_DbgAssert(src1.rows == 1);
-        CV_DbgAssert(src1.size() == src2.size());
-
-        dst.create(src1.size());
-
-        const Point3d* src1Ptr = src1[0];
-        const Point3d* src2Ptr = src2[0];
-        Point3d* dstPtr = dst[0];
+        const T* src1Ptr = src1.ptr<T>();
+        const T* src2Ptr = src2.ptr<T>();
+        T* dstPtr = dst.ptr<T>();
 
         for (int i = 0; i < src1.cols; ++i)
             dstPtr[i] = diffSign(src1Ptr[i], src2Ptr[i]);
+    }
+
+    void diffSign(const Mat& src1, const Mat& src2, Mat& dst)
+    {
+        typedef void (*func_t)(const Mat& src1, const Mat& src2, Mat& dst);
+        static const func_t funcs[] =
+        {
+            diffSignImpl<uchar>,
+            diffSignImpl<schar>,
+            diffSignImpl<ushort>,
+            diffSignImpl<short>,
+            diffSignImpl<int>,
+            diffSignImpl<float>,
+            diffSignImpl<double>
+        };
+
+        CV_DbgAssert(src1.rows == 1);
+        CV_DbgAssert(src1.size() == src2.size());
+        CV_DbgAssert(src1.type() == src2.type());
+
+        dst.create(src1.size(), src1.type());
+
+        const func_t func = funcs[src1.depth()];
+
+        Mat dst1cn = dst.reshape(1);
+        func(src1.reshape(1), src2.reshape(1), dst1cn);
+    }
+
+    void calcBtvDiffTerm(const Mat& X, const SparseMat& DHF, const Mat& y, Mat& dst, Mat& buf)
+    {
+        // degrade current estimated image
+        mulSparseMat(DHF, X, buf);
+
+        // compere input and degraded image
+        diffSign(buf, y, buf);
+
+        // blur the subtructed vector with transposed matrix
+        mulSparseMat(DHF, buf, dst, true);
     }
 
     struct ProcessBody : ParallelLoopBody
@@ -409,3 +483,103 @@ void cv::superres::BilateralTotalVariation::calcBtvRegularization(Size highResSi
 
     parallel_for_(Range(kh, src.rows - kh), body);
 }
+
+///////////////////////////////////////////////////////////////
+// Tests
+
+#ifdef WITH_TESTS
+
+namespace cv
+{
+    namespace superres
+    {
+        TEST(MulSparseMat, Identity)
+        {
+            Mat_<float> src(1, 10);
+            for (int i = 0; i < src.cols; ++i)
+                src(0, i) = i;
+
+            const int sizes[] = {src.cols, src.cols};
+            SparseMat_<float> smat(2, sizes);
+            for (int i = 0; i < src.cols; ++i)
+                smat.ref(i, i) = 1;
+
+            Mat_<float> dst;
+            mulSparseMat(smat, src, dst);
+
+            EXPECT_EQ(src.size(), dst.size());
+
+            const double diff = norm(src, dst, NORM_INF);
+            EXPECT_EQ(0, diff);
+        }
+
+        TEST(MulSparseMat, PairSum)
+        {
+            Mat_<float> src(1, 10);
+            for (int i = 0; i < src.cols; ++i)
+                src(0, i) = i;
+
+            const int sizes[] = {src.cols - 1, src.cols};
+            SparseMat_<float> smat(2, sizes);
+            for (int i = 0; i < src.cols - 1; ++i)
+            {
+                smat.ref(i, i) = 1;
+                smat.ref(i, i + 1) = 1;
+            }
+
+            Mat_<float> dst;
+            mulSparseMat(smat, src, dst);
+
+            EXPECT_EQ(1, dst.rows);
+            EXPECT_EQ(src.cols - 1, dst.cols);
+
+            for (int i = 0; i < src.cols - 1; ++i)
+            {
+                const float gold = src(0, i) + src(0, i + 1);
+                EXPECT_EQ(gold, dst(0, i));
+            }
+        }
+
+        TEST(DiffSign, Accuracy)
+        {
+            Mat_<int> src1(1, 3);
+            src1 << 1, 2, 3;
+
+            Mat_<int> src2(1, 3);
+            src2 << 3, 2, 1;
+
+            Mat_<int> gold(1, 3);
+            gold << -1, 0, 1;
+
+            Mat_<int> dst(1, 3);
+            diffSign(src1, src2, dst);
+
+            const double diff = norm(gold, dst, NORM_INF);
+            EXPECT_EQ(0, diff);
+        }
+
+        TEST(CalcBtvDiffTerm, Accuracy)
+        {
+            Mat_<float> X(1, 9, 2.0f);
+
+            const int sizes[] = {X.cols, X.cols};
+            SparseMat_<float> DHF(2, sizes);
+            for (int i = 0; i < X.cols; ++i)
+                DHF.ref(i, i) = 1;
+
+            Mat_<float> y(1, 9);
+            y << 1,1,1,2,2,2,3,3,3;
+
+            Mat_<float> gold(1, 9);
+            gold << 1,1,1,0,0,0,-1,-1,-1;
+
+            Mat dst, buf;
+            calcBtvDiffTerm(X, DHF, y, dst, buf);
+
+            const double diff = norm(gold, dst, NORM_INF);
+            EXPECT_EQ(0, diff);
+        }
+    }
+}
+
+#endif // WITH_TESTS
