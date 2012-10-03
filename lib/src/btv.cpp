@@ -130,10 +130,18 @@ namespace
     template <typename T> struct VecTraits<T, 1>
     {
         typedef T vec_t;
+        static T defaultValue()
+        {
+            return 0;
+        }
     };
     template <typename T> struct VecTraits<T, 3>
     {
         typedef Point3_<T> vec_t;
+        static Point3_<T> defaultValue()
+        {
+            return Point3_<T>(0,0,0);
+        }
     };
 
     template <typename T, int cn>
@@ -176,7 +184,8 @@ namespace
             {mulSparseMatImpl<double, 1>, mulSparseMatImpl<double, 3>}
         };
 
-        CV_DbgAssert(smat.depth() == src.depth());
+        CV_DbgAssert(smat.depth() == CV_32F || smat.depth() == CV_64F);
+        CV_DbgAssert(src.depth() == smat.depth());
         CV_DbgAssert(src.channels() == 1 || src.channels() == 3);
 
         const func_t func = funcs[smat.depth() == CV_64F][src.channels() == 3];
@@ -277,6 +286,94 @@ namespace
             mulSparseMat((*DHFs)[i], temp, (*diffTerms)[i], true);
         }
     }
+
+    template <typename T, int cn>
+    struct BtvRegularizationBody : ParallelLoopBody
+    {
+        void operator ()(const Range& range) const;
+
+        Mat src;
+        mutable Mat dst;
+        int ksize;
+        const T* weight;
+    };
+
+    template <typename T, int cn>
+    void BtvRegularizationBody<T, cn>::operator ()(const Range& range) const
+    {
+        typedef typename VecTraits<T, cn>::vec_t vec_t;
+
+        for (int i = range.start; i < range.end; ++i)
+        {
+            const vec_t* srcRow = src.ptr<vec_t>(i);
+            vec_t* dstRow = dst.ptr<vec_t>(i);
+
+            for(int j = ksize; j < src.cols - ksize; ++j)
+            {
+                vec_t dstVal = VecTraits<T, cn>::defaultValue();
+
+                const vec_t srcVal = srcRow[j];
+
+                for (int m = 0, count = 0; m <= ksize; ++m)
+                {
+                    const vec_t* srcRow2 = src.ptr<vec_t>(i - m);
+                    const vec_t* srcRow3 = src.ptr<vec_t>(i + m);
+
+                    for (int l = ksize; l + m >= 0; --l, ++count)
+                        dstVal += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
+                }
+
+                dstRow[j] = dstVal;
+            }
+        }
+    }
+
+    template <typename T, int cn>
+    void calcBtvRegularizationImpl(Size highResSize, const Mat& X_, Mat& dst_, int btvKernelSize, double alpha)
+    {
+        CV_DbgAssert(X_.rows == 1 && X_.cols == highResSize.area());
+
+        dst_.create(X_.size(), X_.type());
+
+        Mat src = X_.reshape(X_.channels(), highResSize.height);
+        Mat dst = dst_.reshape(dst_.channels(), highResSize.height);
+
+        const int ksize = (btvKernelSize - 1) / 2;
+
+        AutoBuffer<T> weight_(btvKernelSize * btvKernelSize);
+        T* weight = weight_;
+        for (int m = 0, count = 0; m <= ksize; ++m)
+        {
+            for (int l = ksize; l + m >= 0; --l, ++count)
+                weight[count] = pow(static_cast<T>(alpha), std::abs(m) + std::abs(l));
+        }
+
+        BtvRegularizationBody<T, cn> body;
+
+        body.src = src;
+        body.dst = dst;
+        body.ksize = ksize;
+        body.weight = weight;
+
+        parallel_for_(Range(ksize, src.rows - ksize), body);
+    }
+
+    void calcBtvRegularization(Size highResSize, const Mat& X_, Mat& dst_, int btvKernelSize, double alpha)
+    {
+        typedef void (*func_t)(Size highResSize, const Mat& X_, Mat& dst_, int btvKernelSize, double alpha);
+        static const func_t funcs[2][2] =
+        {
+            {calcBtvRegularizationImpl<float, 1>, calcBtvRegularizationImpl<float, 3>},
+            {calcBtvRegularizationImpl<double, 1>, calcBtvRegularizationImpl<double, 3>},
+        };
+
+        CV_DbgAssert(X_.depth() == CV_32F || X_.depth() == CV_64F);
+        CV_DbgAssert(X_.channels() == 1 || X_.channels() == 3);
+
+        const func_t func = funcs[X_.depth() == CV_64F][X_.channels() == 3];
+
+        func(highResSize, X_, dst_, btvKernelSize, alpha);
+    }
 }
 
 void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray _dst)
@@ -320,7 +417,7 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     Mat_<Point3d> X(1, highResSize.area());
     vector<Mat_<Point3d> > diffTerms(y.size());
     vector<Mat_<Point3d> > temps(y.size());
-    Mat_<Point3d> regTerm;
+    Mat regTerm;
 
     // create initial image by simple bi-cubic interpolation
 
@@ -351,7 +448,7 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
         // regularization term
 
         if (lambda > 0)
-            calcBtvRegularization(highResSize, X, regTerm);
+            calcBtvRegularization(highResSize, X, regTerm, btvKernelSize, alpha);
 
         // creep ideal image, beta is parameter of the creeping speed.
 
@@ -410,78 +507,6 @@ SparseMat_<double> cv::superres::BilateralTotalVariation::calcDHF(cv::Size lowRe
     }
 
     return DHF;
-}
-
-namespace
-{
-    struct BtvRegularizationBody : ParallelLoopBody
-    {
-        void operator ()(const Range& range) const;
-
-        Mat_<Point3d> src;
-        mutable Mat_<Point3d> dst;
-        int kw;
-        int kh;
-        float* weight;
-    };
-
-    void BtvRegularizationBody::operator ()(const Range& range) const
-    {
-        for (int i = range.start; i < range.end; ++i)
-        {
-            const Point3d* srcRow = src[i];
-            Point3d* dstRow = dst[i];
-
-            for(int j = kw; j < src.cols - kw; ++j)
-            {
-                Point3d dstVal(0, 0, 0);
-
-                const Point3d srcVal = srcRow[j];
-
-                for (int m = 0, count = 0; m <= kh; ++m)
-                {
-                    const Point3d* srcRow2 = src[i - m];
-                    const Point3d* srcRow3 = src[i + m];
-
-                    for (int l = kw; l + m >= 0; --l, ++count)
-                        dstVal += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
-                }
-
-                dstRow[j] = dstVal;
-            }
-        }
-    }
-}
-
-void cv::superres::BilateralTotalVariation::calcBtvRegularization(Size highResSize, const Mat_<cv::Point3d>& X_, Mat_<cv::Point3d>& dst_)
-{
-    CV_DbgAssert(X_.rows == 1 && X_.cols == highResSize.area());
-
-    dst_.create(X_.size());
-
-    const Mat_<Point3d> src = X_.reshape(X_.channels(), highResSize.height);
-    Mat_<Point3d> dst = dst_.reshape(dst_.channels(), highResSize.height);
-
-    const int kw = (btvKernelSize - 1) / 2;
-    const int kh = (btvKernelSize - 1) / 2;
-
-    AutoBuffer<float> weight_(btvKernelSize * btvKernelSize);
-    float* weight = weight_;
-    for (int m = 0, count = 0; m <= kh; ++m)
-    {
-        for (int l = kw; l + m >= 0; --l, ++count)
-            weight[count] = pow(alpha, std::abs(m) + std::abs(l));
-    }
-
-    BtvRegularizationBody body;
-
-    body.src = src;
-    body.dst = dst;
-    body.kw = kw;
-    body.kh = kh;
-    body.weight = weight;
-
-    parallel_for_(Range(kh, src.rows - kh), body);
 }
 
 ///////////////////////////////////////////////////////////////

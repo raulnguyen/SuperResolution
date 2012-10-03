@@ -59,7 +59,6 @@ namespace cv
         protected:
             void trainImpl(const std::vector<Mat>& images);
             SparseMat_<double> calcDHF(Size lowResSize, Size highResSize, const Mat_<float>& M);
-            void calcBtvRegularization(Size highResSize, const Mat_<Point3d>& X, Mat_<Point3d>& dst);
 
         private:
             int scale;
