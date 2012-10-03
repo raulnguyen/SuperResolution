@@ -58,7 +58,6 @@ namespace cv
 
         protected:
             void trainImpl(const std::vector<Mat>& images);
-            SparseMat calcDHF(Size lowResSize, const Mat_<float>& M);
 
         private:
             int scale;

@@ -405,29 +405,28 @@ namespace
     {
         void operator ()(const Range& range) const;
 
-        vector<Mat_<Point3d> >* y;
+        vector<Mat>* y;
         vector<SparseMat>* DHFs;
 
-        Mat_<Point3d> X;
+        Mat X;
 
-        vector<Mat_<Point3d> >* diffTerms;
-        vector<Mat_<Point3d> >* temps;
+        vector<Mat>* diffTerms;
     };
 
     void ProcessBody::operator ()(const Range& range) const
     {
-        Mat_<Point3d> temp = (*temps)[range.start];
+        Mat buf;
 
         for (int i = range.start; i < range.end; ++i)
         {
             // degrade current estimated image
-            mulSparseMat((*DHFs)[i], X, temp);
+            mulSparseMat((*DHFs)[i], X, buf);
 
             // compere input and degraded image
-            diffSign(temp, (*y)[i], temp);
+            diffSign(buf, (*y)[i], buf);
 
             // blur the subtructed vector with transposed matrix
-            mulSparseMat((*DHFs)[i], temp, (*diffTerms)[i], true);
+            mulSparseMat((*DHFs)[i], buf, (*diffTerms)[i], true);
         }
     }
 
@@ -518,6 +517,17 @@ namespace
 
         func(highResSize, X_, dst_, btvKernelSize, alpha);
     }
+
+    void addDegFrame(const Mat& image, int scale, int depth, vector<Mat>& y, vector<SparseMat>& DHFs, const Mat& m1, const Mat& m2 = Mat())
+    {
+        Mat workFrame;
+        image.convertTo(workFrame, depth);
+        y.push_back(workFrame);
+
+        SparseMat DHF;
+        calcDHF(image.size(), scale, DHF, depth, m1, m2);
+        DHFs.push_back(DHF);
+    }
 }
 
 void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray _dst)
@@ -532,14 +542,13 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
 
     // calc DHF for all low-res images
 
-    vector<Mat_<Point3d> > y;
+    vector<Mat> y;
     vector<SparseMat> DHFs;
 
     y.reserve(images.size() + 1);
     DHFs.reserve(images.size() + 1);
 
-    y.push_back(src.reshape(src.channels(), 1));
-    DHFs.push_back(calcDHF(lowResSize, Mat_<float>::eye(3, 3)));
+    addDegFrame(src, scale, CV_64F, y, DHFs, Mat_<float>::eye(3, 3));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
@@ -549,25 +558,18 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
         Mat_<float> M = motionEstimator->estimate(curImage, src, &ok);
 
         if (ok)
-        {
-//            M(0, 2) *= scale;
-//            M(1, 2) *= scale;
-
-            y.push_back(curImage.reshape(curImage.channels(), 1));
-            DHFs.push_back(calcDHF(lowResSize, M));
-        }
+            addDegFrame(curImage, scale, CV_64F, y, DHFs, M);
     }
 
-    Mat_<Point3d> X(1, highResSize.area());
-    vector<Mat_<Point3d> > diffTerms(y.size());
-    vector<Mat_<Point3d> > temps(y.size());
+    Mat X(1, highResSize.area(), y.front().type());
+    vector<Mat> diffTerms(y.size());
     Mat regTerm;
 
     // create initial image by simple bi-cubic interpolation
 
     {
-        Mat_<Point3d> lowResImage(lowResSize.height, lowResSize.width, y.front()[0]);
-        Mat_<Point3d> highResImage(highResSize.height, highResSize.width, X[0]);
+        Mat lowResImage(lowResSize.height, lowResSize.width, X.type(), y.front().data);
+        Mat highResImage(highResSize.height, highResSize.width, X.type(), X.data);
         resize(lowResImage, highResImage, highResSize, 0, 0, INTER_CUBIC);
     }
 
@@ -584,7 +586,6 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
             body.DHFs = &DHFs;
             body.X = X;
             body.diffTerms = &diffTerms;
-            body.temps = &temps;
 
             parallel_for_(Range(0, y.size()), body);
         }
@@ -606,14 +607,7 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     }
 
     // re-convert 1D vecor structure to Mat image structure
-    X.reshape(X.channels(), highResSize.height).convertTo(_dst, CV_8UC(X.channels()));
-}
-
-SparseMat cv::superres::BilateralTotalVariation::calcDHF(Size lowResSize, const Mat_<float>& M)
-{
-    SparseMat DHF;
-    ::calcDHF(lowResSize, scale, DHF, CV_64F, M);
-    return DHF;
+    X.reshape(X.channels(), highResSize.height).convertTo(_dst, CV_8U);
 }
 
 ///////////////////////////////////////////////////////////////
