@@ -61,11 +61,10 @@ namespace cv
             void write(FileStorage& fs) const;
             void read(const FileNode& fn);
 
-        protected:
+        private:
             void trainImpl(const std::vector<Mat>& images);
             void buildPatchList(const Mat& src, Mat& lowResPatches, Mat& highResPatches);
 
-        private:
             double scale;
 
             double patchStep;

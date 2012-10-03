@@ -39,29 +39,15 @@ namespace cv
     {
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
         // Thanks to https://github.com/Palethorn/SuperResolution implementation.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public ImageSuperResolution
+        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation
         {
-        public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
-
-            AlgorithmInfo* info() const;
-
-            BilateralTotalVariation();
-
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
         protected:
-            void trainImpl(const std::vector<Mat>& images);
+            BilateralTotalVariation();
 
             void setMotionModel(int motionModel);
 
-        private:
+            void process(Size lowResSize, const std::vector<Mat>& y, const std::vector<SparseMat>& DHF, OutputArray dst);
+
             int scale;
             int iterations;
             double beta;
@@ -72,6 +58,31 @@ namespace cv
             int motionModel;
 
             Ptr<MotionEstimator> motionEstimator;
+
+        private:
+            Mat X;
+            std::vector<Mat> diffTerms;
+            std::vector<Mat> bufs;
+            Mat regTerm;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Image : public ImageSuperResolution, private BilateralTotalVariation
+        {
+        public:
+            static bool init();
+            static Ptr<ImageSuperResolution> create();
+
+            AlgorithmInfo* info() const;
+
+            void train(InputArrayOfArrays images);
+
+            bool empty() const;
+            void clear();
+
+            void process(InputArray src, OutputArray dst);
+
+        private:
+            void trainImpl(const std::vector<Mat>& images);
 
             std::vector<Mat> images;
         };
