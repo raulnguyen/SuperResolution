@@ -25,6 +25,7 @@
 
 #include "btv.hpp"
 #include <opencv2/core/internal.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #ifdef WITH_TESTS
     #include <opencv2/ts/ts_gtest.h>
 #endif
@@ -74,8 +75,7 @@ cv::superres::BilateralTotalVariation::BilateralTotalVariation()
     alpha = 0.7;
     btvKernelSize = 7;
 
-    Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2);
-    motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
+    motionEstimator = MotionEstimator::create(MM_AFFINE);
 }
 
 void cv::superres::BilateralTotalVariation::train(InputArrayOfArrays _images)
@@ -548,17 +548,17 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     y.reserve(images.size() + 1);
     DHFs.reserve(images.size() + 1);
 
-    addDegFrame(src, scale, CV_64F, y, DHFs, Mat_<float>::eye(3, 3));
+    addDegFrame(src, scale, CV_64F, y, DHFs, Mat_<float>::eye(2, 3));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
         const Mat& curImage = images[i];
 
-        bool ok;
-        Mat_<float> M = motionEstimator->estimate(curImage, src, &ok);
+        Mat m1, m2;
+        bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
-            addDegFrame(curImage, scale, CV_64F, y, DHFs, M);
+            addDegFrame(curImage, scale, CV_64F, y, DHFs, m1, m2);
     }
 
     Mat X(1, highResSize.area(), y.front().type());

@@ -29,6 +29,7 @@
 #define __IMAGE_SUPER_RESOLUTION_HPP__
 
 #include <opencv2/core/core.hpp>
+#include "super_resolution_common.hpp"
 #include "super_resolution_export.h"
 
 namespace cv

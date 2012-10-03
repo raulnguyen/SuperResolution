@@ -25,53 +25,26 @@
 
 #pragma once
 
-#ifndef __BTV_HPP__
-#define __BTV_HPP__
+#ifndef __MOTION_ESTIMATION_HPP__
+#define __MOTION_ESTIMATION_HPP__
 
-#include <vector>
-#include "image_super_resolution.hpp"
-#include "motion_estimation.hpp"
+#include "super_resolution_common.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        // Thanks to https://github.com/Palethorn/SuperResolution implementation.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public ImageSuperResolution
+        class SUPER_RESOLUTION_NO_EXPORT MotionEstimator
         {
         public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
+            static Ptr<MotionEstimator> create(MotionModel model);
 
-            AlgorithmInfo* info() const;
+            virtual ~MotionEstimator();
 
-            BilateralTotalVariation();
-
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-        protected:
-            void trainImpl(const std::vector<Mat>& images);
-
-        private:
-            int scale;
-            int iterations;
-            double beta;
-            double lambda;
-            double alpha;
-            int btvKernelSize;
-
-            Ptr<MotionEstimator> motionEstimator;
-
-            std::vector<Mat> images;
+            virtual bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2) = 0;
         };
     }
 }
 
-#endif // __BTV_HPP__
+#endif // __MOTION_ESTIMATION_HPP__

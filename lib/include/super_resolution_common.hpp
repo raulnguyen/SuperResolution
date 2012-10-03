@@ -25,53 +25,25 @@
 
 #pragma once
 
-#ifndef __BTV_HPP__
-#define __BTV_HPP__
+#ifndef __SUPER_RESOLUTION_COMMON_HPP__
+#define __SUPER_RESOLUTION_COMMON_HPP__
 
-#include <vector>
-#include "image_super_resolution.hpp"
-#include "motion_estimation.hpp"
-#include "super_resolution_export.h"
+#include <opencv2/videostab/motion_core.hpp>
 
 namespace cv
 {
     namespace superres
     {
-        // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        // Thanks to https://github.com/Palethorn/SuperResolution implementation.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public ImageSuperResolution
-        {
-        public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
-
-            AlgorithmInfo* info() const;
-
-            BilateralTotalVariation();
-
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-        protected:
-            void trainImpl(const std::vector<Mat>& images);
-
-        private:
-            int scale;
-            int iterations;
-            double beta;
-            double lambda;
-            double alpha;
-            int btvKernelSize;
-
-            Ptr<MotionEstimator> motionEstimator;
-
-            std::vector<Mat> images;
-        };
+        using cv::videostab::MotionModel;
+        using cv::videostab::MM_TRANSLATION;
+        using cv::videostab::MM_TRANSLATION_AND_SCALE;
+        using cv::videostab::MM_ROTATION;
+        using cv::videostab::MM_RIGID;
+        using cv::videostab::MM_SIMILARITY;
+        using cv::videostab::MM_AFFINE;
+        using cv::videostab::MM_HOMOGRAPHY;
+        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
     }
 }
 
-#endif // __BTV_HPP__
+#endif // __SUPER_RESOLUTION_COMMON_HPP__
