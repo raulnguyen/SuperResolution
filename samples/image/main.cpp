@@ -169,13 +169,8 @@ int main(int argc, const char* argv[])
     Mat bicubic;
     resize(src, bicubic, Size(), scale, scale, INTER_CUBIC);
 
-    namedWindow("gold", WINDOW_NORMAL);
     imshow("gold", gold);
-
-    namedWindow("Super Resolution", WINDOW_NORMAL);
     imshow("Super Resolution", highResImage);
-
-    namedWindow("Bi-Cubic Interpolation", WINDOW_NORMAL);
     imshow("Bi-Cubic Interpolation", bicubic);
 
     waitKey();
