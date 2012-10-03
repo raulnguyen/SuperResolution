@@ -126,6 +126,150 @@ void cv::superres::BilateralTotalVariation::clear()
 
 namespace
 {
+    template <typename T>
+    class AffineMotion
+    {
+    public:
+        explicit AffineMotion(const Mat& M) : M(M) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            Point2d res;
+            res.x = M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2);
+            res.y = M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2);
+
+            return res;
+        }
+
+    private:
+        Mat_<T> M;
+    };
+
+    template <typename T>
+    class PerspectiveMotion
+    {
+    public:
+        explicit PerspectiveMotion(const Mat& M) : M(M) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            double w = 1.0 / (M(2, 0) * base.x + M(2, 1) * base.y + M(2, 2));
+
+            Point2d res;
+            res.x = (M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2)) * w;
+            res.y = (M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2)) * w;
+
+            return res;
+        }
+
+    private:
+        Mat_<T> M;
+    };
+
+    template <typename T>
+    class GeneralMotion
+    {
+    public:
+        GeneralMotion(const Mat& dx, const Mat& dy) : dx(dx), dy(dy) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            Point2d res;
+            res.x = base.x + dx(base);
+            res.y = base.y + dy(base);
+
+            return res;
+        }
+
+    private:
+        Mat_<T> dx;
+        Mat_<T> dy;
+    };
+
+    template <typename T, class Motion>
+    void calcDhfImpl(Size lowResSize, Size highResSize, int scale, const Motion& motion, SparseMat& DHF)
+    {
+        const int ksize = scale;
+        const int anchor = ksize / 2;
+        const T div = static_cast<T>(1.0 / (ksize * ksize));
+
+        for (int y = 0, lowResInd = 0; y < lowResSize.height; ++y)
+        {
+            for (int x = 0; x < lowResSize.width; ++x, ++lowResInd)
+            {
+                Point2d lowOrigCoord = motion.calcCoord(Point(x, y));
+
+                for (int i = 0; i < ksize; ++i)
+                {
+                    for (int j = 0; j < ksize; ++j)
+                    {
+                        Point2d highCoord;
+                        highCoord.x = lowOrigCoord.x * scale + j - anchor;
+                        highCoord.y = lowOrigCoord.y * scale + i - anchor;
+
+                        const int nX0 = cvFloor(highCoord.x);
+                        const int nY0 = cvFloor(highCoord.y);
+
+                        if (nX0 >= 0 && nX0 < highResSize.width && nY0 >= 0 && nY0 < highResSize.height)
+                        {
+                            DHF.ref<T>(lowResInd, nY0 * highResSize.width + nX0) += div;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void calcDHF(Size lowResSize, int scale, SparseMat& DHF, int depth, const Mat& m1, const Mat& m2 = Mat())
+    {
+        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
+
+        cv::Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
+
+        const int sizes[] = {lowResSize.area(), highResSize.area()};
+        DHF.create(2, sizes, depth);
+
+        if (!m2.empty())
+        {
+            CV_DbgAssert(m1.type() == CV_32FC1);
+            CV_DbgAssert(m1.size() == lowResSize);
+            CV_DbgAssert(m1.size() == m2.size());
+            CV_DbgAssert(m1.type() == m2.type());
+
+            GeneralMotion<float> motion(m1, m2);
+
+            if (depth == CV_32F)
+                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
+            else
+                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+        }
+        else if (m1.rows == 2)
+        {
+            CV_DbgAssert(m1.cols == 3);
+            CV_DbgAssert(m1.type() == CV_32FC1);
+
+            AffineMotion<float> motion(m1);
+
+            if (depth == CV_32F)
+                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
+            else
+                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+        }
+        else
+        {
+            CV_DbgAssert(m1.rows == 3);
+            CV_DbgAssert(m1.cols == 3);
+            CV_DbgAssert(m1.type() == CV_32FC1);
+
+            PerspectiveMotion<float> motion(m1);
+
+            if (depth == CV_32F)
+                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
+            else
+                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+        }
+    }
+
     template <typename T, int cn> struct VecTraits;
     template <typename T> struct VecTraits<T, 1>
     {
@@ -262,7 +406,7 @@ namespace
         void operator ()(const Range& range) const;
 
         vector<Mat_<Point3d> >* y;
-        vector<SparseMat_<double> >* DHFs;
+        vector<SparseMat>* DHFs;
 
         Mat_<Point3d> X;
 
@@ -389,13 +533,13 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     // calc DHF for all low-res images
 
     vector<Mat_<Point3d> > y;
-    vector<SparseMat_<double> > DHFs;
+    vector<SparseMat> DHFs;
 
     y.reserve(images.size() + 1);
     DHFs.reserve(images.size() + 1);
 
     y.push_back(src.reshape(src.channels(), 1));
-    DHFs.push_back(calcDHF(lowResSize, highResSize, Mat_<float>::eye(3, 3)));
+    DHFs.push_back(calcDHF(lowResSize, Mat_<float>::eye(3, 3)));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
@@ -406,11 +550,11 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
 
         if (ok)
         {
-            M(0, 2) *= scale;
-            M(1, 2) *= scale;
+//            M(0, 2) *= scale;
+//            M(1, 2) *= scale;
 
             y.push_back(curImage.reshape(curImage.channels(), 1));
-            DHFs.push_back(calcDHF(lowResSize, highResSize, M));
+            DHFs.push_back(calcDHF(lowResSize, M));
         }
     }
 
@@ -465,47 +609,10 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     X.reshape(X.channels(), highResSize.height).convertTo(_dst, CV_8UC(X.channels()));
 }
 
-SparseMat_<double> cv::superres::BilateralTotalVariation::calcDHF(cv::Size lowResSize, cv::Size highResSize, const cv::Mat_<float>& M)
+SparseMat cv::superres::BilateralTotalVariation::calcDHF(Size lowResSize, const Mat_<float>& M)
 {
-    // D - down sampling matrix.
-    // H - blur matrix, in this case, we use only ccd sampling blur.
-    // F - motion matrix, in this case, we use only affine motion.
-
-    const int sizes[] = {lowResSize.area(), highResSize.area()};
-    SparseMat_<double> DHF(2, sizes);
-
-    const int ksize = scale;
-    const int anchor = ksize / 2;
-    const double div = 1.0 / (ksize * ksize);
-
-    for (int y = 0; y < lowResSize.height; ++y)
-    {
-        for (int x = 0; x < lowResSize.width; ++x)
-        {
-            const int lowResInd = y * lowResSize.width + x;
-
-            for (int i = 0; i < ksize; ++i)
-            {
-                for (int j = 0; j < ksize; ++j)
-                {
-                    const int Y = y * scale + i - anchor;
-                    const int X = x * scale + j - anchor;
-
-                    const double nX = M(0, 0) * X + M(0, 1) * Y + M(0, 2);
-                    const double nY = M(1, 0) * X + M(1, 1) * Y + M(1, 2);
-
-                    const int nX0 = cvFloor(nX);
-                    const int nY0 = cvFloor(nY);
-
-                    if (nX0 >= 0 && nX0 < highResSize.width && nY0 >= 0 && nY0 < highResSize.height)
-                    {
-                        DHF.ref(lowResInd, nY0 * highResSize.width + nX0) += div;
-                    }
-                }
-            }
-        }
-    }
-
+    SparseMat DHF;
+    ::calcDHF(lowResSize, scale, DHF, CV_64F, M);
     return DHF;
 }
 
