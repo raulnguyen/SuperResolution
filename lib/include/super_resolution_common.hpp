@@ -25,69 +25,25 @@
 
 #pragma once
 
-#ifndef __EXAMPLED_BASED_HPP__
-#define __EXAMPLED_BASED_HPP__
+#ifndef __SUPER_RESOLUTION_COMMON_HPP__
+#define __SUPER_RESOLUTION_COMMON_HPP__
 
-#include <vector>
-#include <opencv2/features2d/features2d.hpp>
-#ifdef WITH_TESTS
-    #include <opencv2/ts/ts_gtest.h>
-#endif
-#include "image_super_resolution.hpp"
-#include "super_resolution_export.h"
+#include <opencv2/videostab/motion_core.hpp>
 
 namespace cv
 {
     namespace superres
     {
-        // W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
-        class SUPER_RESOLUTION_NO_EXPORT ExampledBased : public ImageSuperResolution
-        {
-        public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
-
-            AlgorithmInfo* info() const;
-
-            ExampledBased();
-
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-            void write(FileStorage& fs) const;
-            void read(const FileNode& fn);
-
-        private:
-            void trainImpl(const std::vector<Mat>& images);
-            void buildPatchList(const Mat& src, Mat& lowResPatches, Mat& highResPatches);
-
-            double scale;
-
-            double patchStep;
-            int trainInterpolation;
-
-            int lowResPatchSize;
-            int highResPatchSize;
-
-            double stdDevThresh;
-
-            bool saveTrainBase;
-
-            Ptr<DescriptorMatcher> matcher;
-
-            std::vector<Mat> lowResPatches;
-            std::vector<Mat> highResPatches;
-
-            #ifdef WITH_TESTS
-                FRIEND_TEST(ExampledBased, BuildPatchList);
-                FRIEND_TEST(ExampledBased, ReadWriteConsistency);
-            #endif
-        };
+        using cv::videostab::MotionModel;
+        using cv::videostab::MM_TRANSLATION;
+        using cv::videostab::MM_TRANSLATION_AND_SCALE;
+        using cv::videostab::MM_ROTATION;
+        using cv::videostab::MM_RIGID;
+        using cv::videostab::MM_SIMILARITY;
+        using cv::videostab::MM_AFFINE;
+        using cv::videostab::MM_HOMOGRAPHY;
+        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
     }
 }
 
-#endif
+#endif // __SUPER_RESOLUTION_COMMON_HPP__

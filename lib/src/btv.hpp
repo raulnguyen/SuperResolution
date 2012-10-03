@@ -29,8 +29,8 @@
 #define __BTV_HPP__
 
 #include <vector>
-#include <opencv2/videostab/global_motion.hpp>
 #include "image_super_resolution.hpp"
+#include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
@@ -39,15 +39,40 @@ namespace cv
     {
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
         // Thanks to https://github.com/Palethorn/SuperResolution implementation.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation : public ImageSuperResolution
+        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation
+        {
+        protected:
+            BilateralTotalVariation();
+
+            void setMotionModel(int motionModel);
+
+            void process(Size lowResSize, const std::vector<Mat>& y, const std::vector<SparseMat>& DHF, OutputArray dst);
+
+            int scale;
+            int iterations;
+            double beta;
+            double lambda;
+            double alpha;
+            int btvKernelSize;
+            int workDepth;
+            int motionModel;
+
+            Ptr<MotionEstimator> motionEstimator;
+
+        private:
+            Mat X;
+            std::vector<Mat> diffTerms;
+            std::vector<Mat> bufs;
+            Mat regTerm;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Image : public ImageSuperResolution, private BilateralTotalVariation
         {
         public:
             static bool init();
             static Ptr<ImageSuperResolution> create();
 
             AlgorithmInfo* info() const;
-
-            BilateralTotalVariation();
 
             void train(InputArrayOfArrays images);
 
@@ -56,20 +81,8 @@ namespace cv
 
             void process(InputArray src, OutputArray dst);
 
-        protected:
-            void trainImpl(const std::vector<Mat>& images);
-            SparseMat_<double> calcDHF(Size lowResSize, Size highResSize, const Mat_<float>& M);
-            void calcBtvRegularization(Size highResSize, const Mat_<Point3d>& X, Mat_<Point3d>& dst);
-
         private:
-            int scale;
-            int iterations;
-            double beta;
-            double lambda;
-            double alpha;
-            int btvKernelSize;
-
-            Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
+            void trainImpl(const std::vector<Mat>& images);
 
             std::vector<Mat> images;
         };

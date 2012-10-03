@@ -37,7 +37,7 @@ bool cv::superres::initModule_superres()
     bool all = true;
 
     all &= ExampledBased::init();
-    all &= BilateralTotalVariation::init();
+    all &= BTV_Image::init();
 
     all &= Nlm::init();
 
@@ -53,7 +53,7 @@ Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMeth
     static const func_t funcs[] =
     {
         ExampledBased::create,
-        BilateralTotalVariation::create
+        BTV_Image::create
     };
 
     CV_DbgAssert(method >= IMAGE_SR_EXAMPLE_BASED && method < IMAGE_SR_METHOD_MAX);

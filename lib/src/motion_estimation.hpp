@@ -25,69 +25,26 @@
 
 #pragma once
 
-#ifndef __EXAMPLED_BASED_HPP__
-#define __EXAMPLED_BASED_HPP__
+#ifndef __MOTION_ESTIMATION_HPP__
+#define __MOTION_ESTIMATION_HPP__
 
-#include <vector>
-#include <opencv2/features2d/features2d.hpp>
-#ifdef WITH_TESTS
-    #include <opencv2/ts/ts_gtest.h>
-#endif
-#include "image_super_resolution.hpp"
+#include "super_resolution_common.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        // W. T. Freeman, T. R. Jones, and E. C. Pasztor. Example-based super-resolution.
-        class SUPER_RESOLUTION_NO_EXPORT ExampledBased : public ImageSuperResolution
+        class SUPER_RESOLUTION_NO_EXPORT MotionEstimator
         {
         public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
+            static Ptr<MotionEstimator> create(MotionModel model);
 
-            AlgorithmInfo* info() const;
+            virtual ~MotionEstimator();
 
-            ExampledBased();
-
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-            void write(FileStorage& fs) const;
-            void read(const FileNode& fn);
-
-        private:
-            void trainImpl(const std::vector<Mat>& images);
-            void buildPatchList(const Mat& src, Mat& lowResPatches, Mat& highResPatches);
-
-            double scale;
-
-            double patchStep;
-            int trainInterpolation;
-
-            int lowResPatchSize;
-            int highResPatchSize;
-
-            double stdDevThresh;
-
-            bool saveTrainBase;
-
-            Ptr<DescriptorMatcher> matcher;
-
-            std::vector<Mat> lowResPatches;
-            std::vector<Mat> highResPatches;
-
-            #ifdef WITH_TESTS
-                FRIEND_TEST(ExampledBased, BuildPatchList);
-                FRIEND_TEST(ExampledBased, ReadWriteConsistency);
-            #endif
+            virtual bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2) = 0;
         };
     }
 }
 
-#endif
+#endif // __MOTION_ESTIMATION_HPP__
