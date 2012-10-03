@@ -343,7 +343,7 @@ namespace cv
     {
         TEST(ExampledBased, TrainOnSingleHomogeneousImage)
         {
-            Mat image(100, 100, CV_8U, Scalar::all(127));
+            Mat image(10, 10, CV_8U, Scalar::all(127));
 
             ExampledBased alg;
             alg.train(image);
@@ -356,7 +356,7 @@ namespace cv
             vector<Mat> images(5);
 
             for (size_t i = 0; i < images.size(); ++i)
-                images[i] = Mat(100, 100, CV_8U, Scalar::all(127));
+                images[i] = Mat(10, 10, CV_8U, Scalar::all(127));
 
             ExampledBased alg;
             alg.train(images);
