@@ -59,6 +59,8 @@ namespace cv
         protected:
             void trainImpl(const std::vector<Mat>& images);
 
+            void setMotionModel(int motionModel);
+
         private:
             int scale;
             int iterations;
@@ -66,6 +68,8 @@ namespace cv
             double lambda;
             double alpha;
             int btvKernelSize;
+            int workDepth;
+            int motionModel;
 
             Ptr<MotionEstimator> motionEstimator;
 

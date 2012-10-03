@@ -30,7 +30,6 @@
     #include <opencv2/ts/ts_gtest.h>
 #endif
 
-
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
@@ -40,6 +39,8 @@ namespace cv
 {
     namespace superres
     {
+        typedef void (Algorithm::*IntSetter)(int);
+
         CV_INIT_ALGORITHM(BilateralTotalVariation, "ImageSuperResolution.BilateralTotalVariation",
                           obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                                "Scale factor.");
@@ -52,7 +53,11 @@ namespace cv
                           obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
                                                "Parameter of spacial distribution in btv.");
                           obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                               "Kernel size of btv filter."));
+                                               "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "workDepth", obj.workDepth, false, 0, 0,
+                                               "Depth for inner operations (CV_32F or CV_64F).");
+                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BilateralTotalVariation::setMotionModel,
+                                               "Motion model between frames."));
     }
 }
 
@@ -74,8 +79,16 @@ cv::superres::BilateralTotalVariation::BilateralTotalVariation()
     lambda = 0.03;
     alpha = 0.7;
     btvKernelSize = 7;
+    workDepth = CV_64F;
+    setMotionModel(MM_AFFINE);
+}
 
-    motionEstimator = MotionEstimator::create(MM_AFFINE);
+void cv::superres::BilateralTotalVariation::setMotionModel(int motionModel)
+{
+    CV_DbgAssert(motionModel >= MM_TRANSLATION && motionModel <= MM_UNKNOWN);
+
+    motionEstimator = MotionEstimator::create(static_cast<MotionModel>(motionModel));
+    this->motionModel = motionModel;
 }
 
 void cv::superres::BilateralTotalVariation::train(InputArrayOfArrays _images)
@@ -548,7 +561,7 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
     y.reserve(images.size() + 1);
     DHFs.reserve(images.size() + 1);
 
-    addDegFrame(src, scale, CV_64F, y, DHFs, Mat_<float>::eye(2, 3));
+    addDegFrame(src, scale, workDepth, y, DHFs, Mat_<float>::eye(2, 3));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
@@ -558,7 +571,7 @@ void cv::superres::BilateralTotalVariation::process(InputArray _src, OutputArray
         bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
-            addDegFrame(curImage, scale, CV_64F, y, DHFs, m1, m2);
+            addDegFrame(curImage, scale, workDepth, y, DHFs, m1, m2);
     }
 
     Mat X(1, highResSize.area(), y.front().type());
