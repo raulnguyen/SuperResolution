@@ -29,54 +29,62 @@
 #define __NLM_HPP__
 
 #include <vector>
+#include <opencv2/videostab/global_motion.hpp>
+#include <opencv2/videostab/deblurring.hpp>
 #include "video_super_resolution.hpp"
 #include "super_resolution_export.h"
 
-// M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
-class SUPER_RESOLUTION_NO_EXPORT Nlm : public cv::superres::VideoSuperResolution
+namespace cv
 {
-public:
-    static bool init();
-    static cv::Ptr<VideoSuperResolution> create();
+    namespace superres
+    {
+        // M. Protter, M. Elad, H. Takeda, and P. Milanfar. Generalizing the nonlocal-means to super-resolution reconstruction.
+        class SUPER_RESOLUTION_NO_EXPORT Nlm : public VideoSuperResolution
+        {
+        public:
+            static bool init();
+            static Ptr<VideoSuperResolution> create();
 
-    cv::AlgorithmInfo* info() const;
+            AlgorithmInfo* info() const;
 
-    Nlm();
+            Nlm();
 
-protected:
-    void initImpl(cv::Ptr<IFrameSource>& frameSource);
-    cv::Mat processImpl(const cv::Mat& frame);
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(const Mat& frame);
 
-private:
-    void addNewFrame(const cv::Mat& frame);
-    void processFrame(int idx);
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
 
-    int scale;
-    int searchWindowRadius;
-    int temporalAreaRadius;
-    int patchRadius;
-    double sigma;
-    bool doDeblurring;
+            int scale;
+            int searchWindowRadius;
+            int temporalAreaRadius;
+            int patchRadius;
+            double sigma;
+            bool doDeblurring;
 
-    int storePos;
-    int procPos;
-    int outPos;
+            int storePos;
+            int procPos;
+            int outPos;
 
-    std::vector<cv::Mat> y; // input set of low resolution and noisy images
-    std::vector<cv::Mat> Y; // An initial estimate of the super-resolved sequence.
+            std::vector<Mat> y; // input set of low resolution and noisy images
+            std::vector<Mat> Y; // An initial estimate of the super-resolved sequence.
 
-    cv::Mat_<cv::Point3d> V;
-    cv::Mat_<cv::Point3d> W;
+            Mat_<Point3d> V;
+            Mat_<Point3d> W;
 
-    cv::Mat Z;
+            Mat Z;
 
-    cv::Mat buf;
+            Mat buf;
 
-    cv::Ptr<cv::videostab::ImageMotionEstimatorBase> motionEstimator;
-    cv::Ptr<cv::videostab::DeblurerBase> deblurer;
-    std::vector<cv::Mat> outFrames;
-    std::vector<cv::Mat> motions;
-    std::vector<float> blurrinessRates;
-};
+            Ptr<videostab::ImageMotionEstimatorBase> motionEstimator;
+            Ptr<videostab::DeblurerBase> deblurer;
+            std::vector<Mat> outFrames;
+            std::vector<Mat> motions;
+            std::vector<float> blurrinessRates;
+        };
+    }
+}
 
 #endif // __NLM_HPP__

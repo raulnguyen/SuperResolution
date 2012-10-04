@@ -31,6 +31,7 @@
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
+using namespace cv::videostab;
 
 bool cv::superres::initModule_superres()
 {
@@ -73,7 +74,8 @@ Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMeth
     typedef Ptr<VideoSuperResolution> (*func_t)();
     static const func_t funcs[] =
     {
-        Nlm::create
+        Nlm::create,
+        BTV_Video::create
     };
 
     CV_DbgAssert(method >= VIDEO_SR_NLM && method < VIDEO_SR_METHOD_MAX);

@@ -25,12 +25,10 @@
 
 #include <iostream>
 #include <string>
-
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/contrib/contrib.hpp>
-
 #include "video_super_resolution.hpp"
 
 using namespace std;
@@ -44,25 +42,34 @@ using namespace cv::videostab;
         tm.start(); \
         op; \
         tm.stop(); \
-        cout << msg << " Time : " << tm.getTimeSec() << " s" << endl; \
+        cout << msg << " Time : " << tm.getTimeSec() << " sec" << endl; \
     }
 
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
         "{ video v | text.avi | Input video }"
-        "{ scale s | 4        | Scale factor }");
+        "{ scale s | 4        | Scale factor }"
+        "{ help h  |          | Print help message }"
+    );
+
+    if (cmd.has("help"))
+    {
+        cmd.about("This sample demonstrates Super Resolution algorithms for video sequence");
+        cmd.printMessage();
+        return 0;
+    }
 
     const string inputVideoName = cmd.get<string>("video");
     const int scale = cmd.get<int>("scale");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION);
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> videoSource(new VideoFileSource(inputVideoName));
-    Ptr<IFrameSource> videoSource2(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName));
 
-    superRes->setFrameSource(videoSource);
+    superRes->setFrameSource(superResSource);
 
     for (;;)
     {
@@ -72,11 +79,15 @@ int main(int argc, const char* argv[])
         if (result.empty())
             break;
 
-        Mat frame = videoSource2->nextFrame();
+        Mat frame = bicubicSource->nextFrame();
+
+        if (frame.empty())
+            break;
+
         Mat bicubic;
         resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 
-        imshow("Result", result);
+        imshow("Super Resolution", result);
         imshow("BiCubic", bicubic);
 
         waitKey();

@@ -30,6 +30,7 @@
 
 #include <vector>
 #include "image_super_resolution.hpp"
+#include "video_super_resolution.hpp"
 #include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
@@ -87,6 +88,36 @@ namespace cv
             void trainImpl(const std::vector<Mat>& images);
 
             std::vector<Mat> images;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Video : public VideoSuperResolution, private BilateralTotalVariation
+        {
+        public:
+            static bool init();
+            static Ptr<VideoSuperResolution> create();
+
+            AlgorithmInfo* info() const;
+
+            BTV_Video();
+
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(const Mat& frame);
+
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
+
+            int temporalAreaRadius;
+
+            std::vector<Mat> frames;
+            std::vector<Mat> results;
+            std::vector<Mat> y;
+            std::vector<SparseMat> DHF;
+
+            int storePos;
+            int procPos;
+            int outPos;
         };
     }
 }

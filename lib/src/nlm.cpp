@@ -25,37 +25,45 @@
 
 #include "nlm.hpp"
 #include <opencv2/core/internal.hpp>
+#include <opencv2/videostab/ring_buffer.hpp>
 #include "extract_patch.hpp"
 
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
+using namespace cv::videostab;
 
-CV_INIT_ALGORITHM(Nlm, "VideoSuperResolution.Nlm",
-                  obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
-                                       "Scale factor.");
-                  obj.info()->addParam(obj, "searchWindowRadius", obj.searchWindowRadius, false, 0, 0,
-                                       "Radius of the patch search window in low resolution image.");
-                  obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
-                                       "Radius of the temporal search area.");
-                  obj.info()->addParam(obj, "patchRadius", obj.patchRadius, false, 0, 0,
-                                       "Radius of the patch.");
-                  obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
-                                       "Weight of the patch difference");
-                  obj.info()->addParam(obj, "doDeblurring", obj.doDeblurring, false, 0, 0,
-                                       "Perform deblurring operation"));
+namespace cv
+{
+    namespace superres
+    {
+        CV_INIT_ALGORITHM(Nlm, "VideoSuperResolution.Nlm",
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                               "Scale factor.");
+                          obj.info()->addParam(obj, "searchWindowRadius", obj.searchWindowRadius, false, 0, 0,
+                                               "Radius of the patch search window in low resolution image.");
+                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
+                                               "Radius of the temporal search area.");
+                          obj.info()->addParam(obj, "patchRadius", obj.patchRadius, false, 0, 0,
+                                               "Radius of the patch.");
+                          obj.info()->addParam(obj, "sigma", obj.sigma, false, 0, 0,
+                                               "Weight of the patch difference");
+                          obj.info()->addParam(obj, "doDeblurring", obj.doDeblurring, false, 0, 0,
+                                               "Perform deblurring operation"));
+    }
+}
 
-bool Nlm::init()
+bool cv::superres::Nlm::init()
 {
     return !Nlm_info_auto.name().empty();
 }
 
-Ptr<VideoSuperResolution> Nlm::create()
+Ptr<VideoSuperResolution> cv::superres::Nlm::create()
 {
     return Ptr<VideoSuperResolution>(new Nlm);
 }
 
-Nlm::Nlm()
+cv::superres::Nlm::Nlm()
 {
     scale = 2;
     searchWindowRadius = 10;
@@ -103,7 +111,7 @@ namespace
         return patchDiff;
     }
 
-    struct LoopBody : ParallelLoopBody
+    struct ProcessBody : ParallelLoopBody
     {
         void operator ()(const Range& range) const;
 
@@ -122,7 +130,7 @@ namespace
         mutable Mat_<Point3d> W;
     };
 
-    void LoopBody::operator ()(const Range& range) const
+    void ProcessBody::operator ()(const Range& range) const
     {
         const int patchSize = 2 * patchRadius + 1;
         const double patchDiffWeight = 1.0 / (2.0 * sigma * sigma * patchSize * patchSize);
@@ -174,7 +182,7 @@ namespace
     }
 }
 
-void Nlm::initImpl(cv::Ptr<IFrameSource>& frameSource)
+void cv::superres::Nlm::initImpl(Ptr<IFrameSource>& frameSource)
 {
     deblurer->setRadius(temporalAreaRadius);
 
@@ -221,7 +229,7 @@ void Nlm::initImpl(cv::Ptr<IFrameSource>& frameSource)
     }
 }
 
-Mat Nlm::processImpl(const Mat& frame)
+Mat cv::superres::Nlm::processImpl(const Mat& frame)
 {
     addNewFrame(frame);
 
@@ -250,13 +258,13 @@ Mat Nlm::processImpl(const Mat& frame)
     return at(outPos, outFrames);
 }
 
-void Nlm::processFrame(int idx)
+void cv::superres::Nlm::processFrame(int idx)
 {
     at(idx, Y).convertTo(V, V.depth());
     W.create(V.size());
     W.setTo(Scalar::all(1));
 
-    LoopBody body;
+    ProcessBody body;
 
     body.scale = scale;
     body.searchWindowRadius = searchWindowRadius;
@@ -281,7 +289,7 @@ void Nlm::processFrame(int idx)
     cvtColor(at(idx, Y), at(idx, outFrames), COLOR_Lab2LBGR);
 }
 
-void Nlm::addNewFrame(const cv::Mat& frame)
+void cv::superres::Nlm::addNewFrame(const Mat& frame)
 {
     CV_DbgAssert(frame.type() == CV_8UC3);
     CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, y).size());

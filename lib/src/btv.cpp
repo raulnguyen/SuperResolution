@@ -26,6 +26,7 @@
 #include "btv.hpp"
 #include <opencv2/core/internal.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/videostab/ring_buffer.hpp>
 #ifdef WITH_TESTS
     #include <opencv2/ts/ts_gtest.h>
 #endif
@@ -448,9 +449,9 @@ namespace cv
                                                "Depth for inner operations (CV_32F or CV_64F).");
                           obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Image::setMotionModel,
                                                "Motion model between frames.");
-                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, (IntSetter) &BTV_Image::setMotionModel,
+                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
                                                "Blur model.");
-                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, (IntSetter) &BTV_Image::setMotionModel,
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
                                                "Blur kernel size (if -1, than it will be equal scale factor)."));
     }
 }
@@ -765,6 +766,120 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
     }
 
     BilateralTotalVariation::process(src.size(), y, DHF, dst);
+}
+
+///////////////////////////////////////////////////////////////
+// BTV_Video
+
+namespace cv
+{
+    namespace superres
+    {
+        CV_INIT_ALGORITHM(BTV_Video, "VideoSuperResolution.BilateralTotalVariation",
+                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
+                                               "Radius of the temporal search area.");
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                               "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
+                                               "Iteration count.");
+                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
+                                               "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
+                                               "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
+                                               "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
+                                               "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "workDepth", obj.workDepth, false, 0, 0,
+                                               "Depth for inner operations (CV_32F or CV_64F).");
+                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Video::setMotionModel,
+                                              "Motion model between frames.");
+                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
+                                               "Blur model.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
+                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
+    }
+}
+
+bool cv::superres::BTV_Video::init()
+{
+    return !BTV_Video_info_auto.name().empty();
+}
+
+Ptr<VideoSuperResolution> cv::superres::BTV_Video::create()
+{
+    return Ptr<VideoSuperResolution>(new BTV_Video);
+}
+
+cv::superres::BTV_Video::BTV_Video()
+{
+    temporalAreaRadius = 4;
+}
+
+void cv::superres::BTV_Video::initImpl(Ptr<IFrameSource>& frameSource)
+{
+    const int cacheSize = 2 * temporalAreaRadius + 1;
+
+    frames.resize(cacheSize);
+    results.resize(cacheSize);
+    y.reserve(cacheSize);
+    DHF.reserve(cacheSize);
+
+    storePos = -1;
+    procPos = storePos - temporalAreaRadius;
+    outPos = procPos - temporalAreaRadius - 1;
+
+    for (int t = -temporalAreaRadius; t <= temporalAreaRadius; ++t)
+    {
+        Mat frame = frameSource->nextFrame();
+
+        CV_Assert(!frame.empty());
+
+        addNewFrame(frame);
+    }
+
+    for (int i = 0; i <= procPos; ++i)
+        processFrame(i);
+}
+
+Mat cv::superres::BTV_Video::processImpl(const Mat& frame)
+{
+    addNewFrame(frame);
+    processFrame(procPos);
+    return at(outPos, results);
+}
+
+void cv::superres::BTV_Video::processFrame(int idx)
+{
+    y.clear();
+    DHF.clear();
+
+    Mat src = at(idx, frames);
+
+    for (size_t k = 0; k < frames.size(); ++k)
+    {
+        const Mat& curImage = frames[k];
+
+        Mat m1, m2;
+        bool ok = motionEstimator->estimate(curImage, src, m1, m2);
+
+        if (ok)
+            addDegFrame(curImage, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, m1, m2);
+    }
+
+    BilateralTotalVariation::process(src.size(), y, DHF, at(idx, results));
+}
+
+void cv::superres::BTV_Video::addNewFrame(const Mat& frame)
+{
+    CV_DbgAssert(frame.type() == CV_8UC3);
+    CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
+
+    ++storePos;
+    ++procPos;
+    ++outPos;
+
+    frame.copyTo(at(storePos, frames));
 }
 
 ///////////////////////////////////////////////////////////////

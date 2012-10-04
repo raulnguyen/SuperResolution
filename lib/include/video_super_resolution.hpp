@@ -29,18 +29,20 @@
 #define __VIDEO_SUPER_RESOLUTION_HPP__
 
 #include <opencv2/core/core.hpp>
-#include <opencv2/videostab/videostab.hpp>
+#include <opencv2/videostab/frame_source.hpp>
+#include "super_resolution_common.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        using namespace videostab;
+        using videostab::IFrameSource;
 
         enum VideoSRMethod
         {
             VIDEO_SR_NLM,
+            VIDEO_SR_BILATERAL_TOTAL_VARIATION,
             VIDEO_SR_METHOD_MAX
         };
 
