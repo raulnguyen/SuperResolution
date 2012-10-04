@@ -43,6 +43,12 @@ namespace cv
         using cv::videostab::MM_AFFINE;
         using cv::videostab::MM_HOMOGRAPHY;
         using cv::videostab::MM_UNKNOWN; // General motion via optical flow
+
+        enum BlurModel
+        {
+            BLUR_BOX,
+            BLUR_GAUSS
+        };
     }
 }
 

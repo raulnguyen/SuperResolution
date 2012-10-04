@@ -47,6 +47,8 @@ cv::superres::BilateralTotalVariation::BilateralTotalVariation()
     alpha = 0.7;
     btvKernelSize = 7;
     workDepth = CV_64F;
+    blurModel = BLUR_BOX;
+    blurKernelSize = -1;
     setMotionModel(MM_AFFINE);
 }
 
@@ -445,7 +447,11 @@ namespace cv
                           obj.info()->addParam(obj, "workDepth", obj.workDepth, false, 0, 0,
                                                "Depth for inner operations (CV_32F or CV_64F).");
                           obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Image::setMotionModel,
-                                               "Motion model between frames."));
+                                               "Motion model between frames.");
+                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, (IntSetter) &BTV_Image::setMotionModel,
+                                               "Blur model.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, (IntSetter) &BTV_Image::setMotionModel,
+                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
     }
 }
 
@@ -567,8 +573,65 @@ namespace
         Mat_<T> dy;
     };
 
-    template <typename T, class Motion>
-    void calcDhfImpl(Size lowResSize, Size highResSize, int scale, const Motion& motion, SparseMat& DHF)
+    template <typename T>
+    class BoxBlur
+    {
+    public:
+        BoxBlur(int kh, int kw) : kw(kw), kh(kh)
+        {
+            div = static_cast<T>(1.0 / (kw * kh));
+        }
+
+        T operator ()(int i, int j) const
+        {
+            CV_DbgAssert(i >= 0 && i < height());
+            CV_DbgAssert(j >= 0 && j < width());
+
+            return div;
+        }
+
+        int width() const { return kw; }
+        int height() const { return kh; }
+
+    private:
+        int kw;
+        int kh;
+        T div;
+    };
+
+    template <typename T>
+    class GaussBlur
+    {
+    public:
+        GaussBlur(int kh, int kw)
+        {
+            row = getGaussianKernel(kw, 0, DataType<T>::type);
+            col = getGaussianKernel(kh, 0, DataType<T>::type);
+
+            prow = row[0];
+            pcol = col[0];
+        }
+
+        T operator ()(int i, int j) const
+        {
+            CV_DbgAssert(i >= 0 && i < height());
+            CV_DbgAssert(j >= 0 && j < width());
+
+            return prow[i] * pcol[j];
+        }
+
+        int width() const { return row.rows; }
+        int height() const { return col.rows; }
+
+    private:
+        Mat_<T> row;
+        Mat_<T> col;
+        T* prow;
+        T* pcol;
+    };
+
+    template <typename T, class Motion, class Blur>
+    void calcDhfImpl(Size lowResSize, Size highResSize, int scale, const Motion& motion, const Blur& blur, SparseMat& DHF)
     {
         CV_DbgAssert(scale > 1);
         CV_DbgAssert(DHF.type() == DataType<T>::type);
@@ -576,42 +639,41 @@ namespace
         CV_DbgAssert(DHF.size(0) == lowResSize.area());
         CV_DbgAssert(DHF.size(1) == highResSize.area());
 
-        const int ksize = scale;
-        const int anchor = ksize / 2;
-        const T div = static_cast<T>(1.0 / (ksize * ksize));
-
         for (int y = 0, lowResInd = 0; y < lowResSize.height; ++y)
         {
             for (int x = 0; x < lowResSize.width; ++x, ++lowResInd)
             {
                 Point2d lowOrigCoord = motion.calcCoord(Point(x, y));
 
-                for (int i = 0; i < ksize; ++i)
+                for (int i = 0; i < blur.height(); ++i)
                 {
-                    for (int j = 0; j < ksize; ++j)
+                    for (int j = 0; j < blur.width(); ++j)
                     {
-                        const int X = cvFloor(lowOrigCoord.x * scale + j - anchor);
-                        const int Y = cvFloor(lowOrigCoord.y * scale + i - anchor);
+                        const int X = cvFloor(lowOrigCoord.x * scale + j - blur.width() / 2);
+                        const int Y = cvFloor(lowOrigCoord.y * scale + i - blur.height() / 2);
 
                         if (X >= 0 && X < highResSize.width && Y >= 0 && Y < highResSize.height)
-                        {
-                            DHF.ref<T>(lowResInd, Y * highResSize.width + X) += div;
-                        }
+                            DHF.ref<T>(lowResInd, Y * highResSize.width + X) += blur(i, j);
                     }
                 }
             }
         }
     }
 
-    void calcDHF(Size lowResSize, int scale, SparseMat& DHF, int depth, const Mat& m1, const Mat& m2 = Mat())
+    template <typename T, template <typename> class Blur>
+    void calcDHFCaller(Size lowResSize, int scale, SparseMat& DHF, int blurKernelSize, const Mat& m1, const Mat& m2)
     {
         CV_DbgAssert(scale > 1);
-        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
 
         Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
         const int sizes[] = {lowResSize.area(), highResSize.area()};
-        DHF.create(2, sizes, depth);
+        DHF.create(2, sizes, DataType<T>::type);
+
+        if (blurKernelSize < 0)
+            blurKernelSize = scale;
+
+        Blur<T> blur(blurKernelSize, blurKernelSize);
 
         if (!m2.empty())
         {
@@ -622,10 +684,7 @@ namespace
 
             GeneralMotion<float> motion(m1, m2);
 
-            if (depth == CV_32F)
-                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
-            else
-                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
         }
         else if (m1.rows == 2)
         {
@@ -634,10 +693,7 @@ namespace
 
             AffineMotion<float> motion(m1);
 
-            if (depth == CV_32F)
-                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
-            else
-                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
         }
         else
         {
@@ -647,14 +703,25 @@ namespace
 
             PerspectiveMotion<float> motion(m1);
 
-            if (depth == CV_32F)
-                calcDhfImpl<float>(lowResSize, highResSize, scale, motion, DHF);
-            else
-                calcDhfImpl<double>(lowResSize, highResSize, scale, motion, DHF);
+            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
         }
     }
 
-    void addDegFrame(const Mat& image, int scale, int depth, vector<Mat>& y, vector<SparseMat>& DHFs, const Mat& m1, const Mat& m2 = Mat())
+    void calcDHF(Size lowResSize, int scale, SparseMat& DHF, int depth, BlurModel blurModel, int blurKernelSize, const Mat& m1, const Mat& m2 = Mat())
+    {
+        typedef void (*func_t)(Size lowResSize, int scale, SparseMat& DHF, int blurKernelSsize, const Mat& m1, const Mat& m2);
+        static const func_t funcs[2][2] =
+        {
+            {calcDHFCaller<float, BoxBlur>, calcDHFCaller<float, GaussBlur>},
+            {calcDHFCaller<double, BoxBlur>, calcDHFCaller<double, GaussBlur>}
+        };
+
+        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
+
+        funcs[depth == CV_64F][blurModel](lowResSize, scale, DHF, blurKernelSize, m1, m2);
+    }
+
+    void addDegFrame(const Mat& image, int scale, int depth, vector<Mat>& y, vector<SparseMat>& DHFs, BlurModel blurModel, int blurKernelSize, const Mat& m1, const Mat& m2 = Mat())
     {
         CV_DbgAssert(depth == CV_32F || depth == CV_64F);
 
@@ -663,7 +730,7 @@ namespace
         y.push_back(workFrame.reshape(workFrame.channels(), 1));
 
         SparseMat DHF;
-        calcDHF(image.size(), scale, DHF, depth, m1, m2);
+        calcDHF(image.size(), scale, DHF, depth, blurModel, blurKernelSize, m1, m2);
         DHFs.push_back(DHF);
     }
 }
@@ -674,6 +741,7 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
 
     CV_DbgAssert(empty() || src.size() == images[0].size());
     CV_DbgAssert(empty() || src.type() == images[0].type());
+    CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
 
     // calc DHF for all low-res images
 
@@ -683,7 +751,7 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
     y.reserve(images.size() + 1);
     DHF.reserve(images.size() + 1);
 
-    addDegFrame(src, scale, workDepth, y, DHF, Mat_<float>::eye(2, 3));
+    addDegFrame(src, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, Mat_<float>::eye(2, 3));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
@@ -693,7 +761,7 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
         bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
-            addDegFrame(curImage, scale, workDepth, y, DHF, m1, m2);
+            addDegFrame(curImage, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, m1, m2);
     }
 
     BilateralTotalVariation::process(src.size(), y, DHF, dst);

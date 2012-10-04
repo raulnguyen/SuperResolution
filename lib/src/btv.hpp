@@ -56,6 +56,8 @@ namespace cv
             int btvKernelSize;
             int workDepth;
             int motionModel;
+            int blurModel;
+            int blurKernelSize;
 
             Ptr<MotionEstimator> motionEstimator;
 
