@@ -654,7 +654,7 @@ namespace
                         const int Y = cvFloor(lowOrigCoord.y * scale + i - blur.height() / 2);
 
                         if (X >= 0 && X < highResSize.width && Y >= 0 && Y < highResSize.height)
-                            DHF.ref<T>(lowResInd, Y * highResSize.width + X) += blur(i, j);
+                            DHF.ref<T>(lowResInd, Y * highResSize.width + X) = blur(i, j);
                     }
                 }
             }
