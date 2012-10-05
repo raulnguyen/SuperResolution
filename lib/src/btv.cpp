@@ -37,6 +37,212 @@ using namespace cv::superres;
 using namespace cv::videostab;
 
 ///////////////////////////////////////////////////////////////
+// DhtMat
+
+namespace
+{
+    template <typename T>
+    class AffineMotion
+    {
+    public:
+        explicit AffineMotion(const Mat& M) : M(M) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            Point2d res;
+            res.x = M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2);
+            res.y = M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2);
+
+            return res;
+        }
+
+    private:
+        Mat_<T> M;
+    };
+
+    template <typename T>
+    class PerspectiveMotion
+    {
+    public:
+        explicit PerspectiveMotion(const Mat& M) : M(M) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            double w = 1.0 / (M(2, 0) * base.x + M(2, 1) * base.y + M(2, 2));
+
+            Point2d res;
+            res.x = (M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2)) * w;
+            res.y = (M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2)) * w;
+
+            return res;
+        }
+
+    private:
+        Mat_<T> M;
+    };
+
+    template <typename T>
+    class GeneralMotion
+    {
+    public:
+        GeneralMotion(const Mat& dx, const Mat& dy) : dx(dx), dy(dy) {}
+
+        Point2d calcCoord(Point base) const
+        {
+            Point2d res;
+            res.x = base.x + dx(base);
+            res.y = base.y + dy(base);
+
+            return res;
+        }
+
+    private:
+        Mat_<T> dx;
+        Mat_<T> dy;
+    };
+
+    int clamp(int val, int minVal, int maxVal)
+    {
+        return max(min(val, maxVal), minVal);
+    }
+
+    template <class Motion>
+    void calcCoordsImpl(Size lowResSize, Size highResSize, int scale, int blurKernelSize, const Motion& motion, Mat_<Point>& coords)
+    {
+        CV_DbgAssert(scale > 1);
+        CV_DbgAssert(blurKernelSize > 0);
+
+        coords.create(lowResSize.area(), blurKernelSize * blurKernelSize);
+
+        for (int y = 0, lowResInd = 0; y < lowResSize.height; ++y)
+        {
+            for (int x = 0; x < lowResSize.width; ++x, ++lowResInd)
+            {
+                Point2d lowOrigCoord = motion.calcCoord(Point(x, y));
+
+                for (int i = 0, highResInd = 0; i < blurKernelSize; ++i)
+                {
+                    for (int j = 0; j < blurKernelSize; ++j, ++highResInd)
+                    {
+                        int X = cvFloor(lowOrigCoord.x * scale + j - blurKernelSize / 2);
+                        int Y = cvFloor(lowOrigCoord.y * scale + i - blurKernelSize / 2);
+
+                        X = clamp(X, 0, highResSize.width - 1);
+                        Y = clamp(Y, 0, highResSize.height - 1);
+
+                        coords(lowResInd, highResInd) = Point(X, Y);
+                    }
+                }
+            }
+        }
+    }
+
+    void calcCoords(Size lowResSize, int scale, int blurKernelSize, const Mat& m1, const Mat& m2, Mat_<Point>& coords)
+    {
+        CV_DbgAssert(scale > 1);
+
+        Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
+
+        if (!m2.empty())
+        {
+            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
+            CV_DbgAssert(m1.size() == lowResSize);
+            CV_DbgAssert(m1.size() == m2.size());
+            CV_DbgAssert(m1.type() == m2.type());
+
+            if (m1.type() == CV_32FC1)
+            {
+                GeneralMotion<float> motion(m1, m2);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+            else
+            {
+                GeneralMotion<double> motion(m1, m2);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+        }
+        else if (m1.rows == 2)
+        {
+            CV_DbgAssert(m1.cols == 3);
+            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
+
+            if (m1.type() == CV_32FC1)
+            {
+                AffineMotion<float> motion(m1);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+            else
+            {
+                AffineMotion<double> motion(m1);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+        }
+        else
+        {
+            CV_DbgAssert(m1.rows == 3);
+            CV_DbgAssert(m1.cols == 3);
+            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
+
+            if (m1.type() == CV_32FC1)
+            {
+                PerspectiveMotion<float> motion(m1);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+            else
+            {
+                PerspectiveMotion<double> motion(m1);
+                calcCoordsImpl(lowResSize, highResSize, scale, blurKernelSize, motion, coords);
+            }
+        }
+    }
+}
+
+void DhfMat::build(Size lowResSize, int scale, BlurModel blurModel, int blurKernelSize, int depth, const Mat& m1, const Mat& m2)
+{
+    CV_DbgAssert(scale > 1);
+    CV_DbgAssert(depth == CV_32F || depth == CV_64F);
+
+    if (blurKernelSize < 0)
+        blurKernelSize = scale;
+
+    switch (blurModel)
+    {
+    case BLUR_BOX:
+        weights.create(1, blurKernelSize * blurKernelSize, depth);
+        weights.setTo(Scalar::all(1.0 / (blurKernelSize * blurKernelSize)));
+        break;
+
+    case BLUR_GAUSS:
+        if (depth == CV_32F)
+        {
+            Mat_<float> ker = getGaussianKernel(blurKernelSize, 0, CV_32F);
+            blurKernelSize = ker.rows;
+
+            weights.create(1, blurKernelSize * blurKernelSize, CV_32F);
+            float* weightsPtr = weights.ptr<float>();
+
+            for (int i = 0, ind = 0; i < blurKernelSize; ++i)
+                for (int j = 0; j < blurKernelSize; ++j, ++ind)
+                    weightsPtr[ind] = ker(i, 0) * ker(j, 0);
+        }
+        else
+        {
+            Mat_<double> ker = getGaussianKernel(blurKernelSize, 0, CV_64F);
+            blurKernelSize = ker.rows;
+
+            weights.create(1, blurKernelSize * blurKernelSize, CV_64F);
+            double* weightsPtr = weights.ptr<double>();
+
+            for (int i = 0, ind = 0; i < blurKernelSize; ++i)
+                for (int j = 0; j < blurKernelSize; ++j, ++ind)
+                    weightsPtr[ind] = ker(i, 0) * ker(j, 0);
+        }
+    };
+
+    calcCoords(lowResSize, scale, blurKernelSize, m1, m2, coords);
+}
+
+///////////////////////////////////////////////////////////////
 // BilateralTotalVariation
 
 cv::superres::BilateralTotalVariation::BilateralTotalVariation()
@@ -63,88 +269,83 @@ void cv::superres::BilateralTotalVariation::setMotionModel(int motionModel)
 
 namespace
 {
-    void resizeVec(Size lowResSize, Size highResSize, const Mat& lowVec, Mat& highVec)
+    template <typename T, typename VT>
+    void mulDhfMatImpl(const DhfMat& DHT, const Mat& src, Mat& dst, Size dstSize, bool isTranspose)
     {
-        CV_DbgAssert(lowVec.rows == 1);
-        CV_DbgAssert(lowVec.cols == lowResSize.area());
+        CV_DbgAssert(DHT.weights.type() == DataType<T>::type);
+        CV_DbgAssert(src.type() == DataType<VT>::type);
+        CV_DbgAssert(DHT.coords.cols == DHT.weights.cols);
 
-        highVec.create(1, highResSize.area(), lowVec.type());
+        const T* weights = DHT.weights.ptr<T>();
 
-        Mat lowImage(lowResSize, lowVec.type(), lowVec.data);
-        Mat highImage(highResSize, highVec.type(), highVec.data);
-
-        resize(lowImage, highImage, highResSize, 0, 0, INTER_CUBIC);
-    }
-
-    template <typename T, int cn> struct VecTraits;
-    template <typename T> struct VecTraits<T, 1>
-    {
-        typedef T vec_t;
-        static T defaultValue()
-        {
-            return 0;
-        }
-    };
-    template <typename T> struct VecTraits<T, 3>
-    {
-        typedef Point3_<T> vec_t;
-        static Point3_<T> defaultValue()
-        {
-            return Point3_<T>(0,0,0);
-        }
-    };
-
-    template <typename T, int cn>
-    void mulSparseMatImpl(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose)
-    {
-        typedef typename VecTraits<T, cn>::vec_t vec_t;
-
-        const int srcInd = isTranspose ? 0 : 1;
-        const int dstInd = isTranspose ? 1 : 0;
-
-        CV_DbgAssert(smat.type() == DataType<T>::type);
-        CV_DbgAssert(smat.dims() == 2);
-        CV_DbgAssert(src.rows == 1);
-        CV_DbgAssert(src.cols == smat.size(srcInd));
-        CV_DbgAssert(src.depth() == DataType<T>::depth);
-        CV_DbgAssert(src.channels() == cn);
-
-        dst.create(1, smat.size(dstInd), src.type());
+        dst.create(dstSize, src.type());
         dst.setTo(Scalar::all(0));
 
-        const vec_t* srcPtr = src.ptr<vec_t>();
-        vec_t* dstPtr = dst.ptr<vec_t>();
-
-        for (SparseMatConstIterator it = smat.begin(), it_end = smat.end(); it != it_end; ++it)
+        if (isTranspose)
         {
-            const int i = it.node()->idx[srcInd];
-            const int j = it.node()->idx[dstInd];
+            for (int y = 0, lowResInd = 0; y < src.rows; ++y)
+            {
+                const VT* srcPtr = src.ptr<VT>(y);
 
-            CV_DbgAssert(i >= 0 && i < src.cols);
-            CV_DbgAssert(j >= 0 && j < dst.cols);
+                for (int x = 0; x < src.cols; ++x, ++lowResInd)
+                {
+                    const Point* coordPtr = DHT.coords[lowResInd];
 
-            const T w = it.value<T>();
+                    for (int i = 0; i < DHT.coords.cols; ++i)
+                    {
+                        const Point highResCoord = coordPtr[i];
+                        const double w = weights[i];
 
-            dstPtr[j] += w * srcPtr[i];
+                        CV_DbgAssert(highResCoord.x >= 0 && highResCoord.x < dst.cols);
+                        CV_DbgAssert(highResCoord.y >= 0 && highResCoord.y < dst.rows);
+
+                        dst.at<VT>(highResCoord) += w * srcPtr[x];
+                    }
+                }
+            }
+        }
+        else
+        {
+            CV_DbgAssert(dstSize.area() == DHT.coords.rows);
+
+            for (int y = 0, lowResInd = 0; y < dstSize.height; ++y)
+            {
+                VT* dstPtr = dst.ptr<VT>(y);
+
+                for (int x = 0; x < dstSize.width; ++x, ++lowResInd)
+                {
+                    const Point* coordPtr = DHT.coords[lowResInd];
+
+                    for (int i = 0; i < DHT.coords.cols; ++i)
+                    {
+                        const Point highResCoord = coordPtr[i];
+                        const double w = weights[i];
+
+                        CV_DbgAssert(highResCoord.x >= 0 && highResCoord.x < src.cols);
+                        CV_DbgAssert(highResCoord.y >= 0 && highResCoord.y < src.rows);
+
+                        dstPtr[x] += w * src.at<VT>(highResCoord);
+                    }
+                }
+            }
         }
     }
 
-    void mulSparseMat(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose = false)
+    void mulDhfMat(const DhfMat& DHT, const Mat& src, Mat& dst, Size dstSize, bool isTranspose = false)
     {
-        typedef void (*func_t)(const SparseMat& smat, const Mat& src, Mat& dst, bool isTranspose);
+        typedef void (*func_t)(const DhfMat& DHT, const Mat& src, Mat& dst, Size dstSize, bool isTranspose);
         static const func_t funcs[2][2] =
         {
-            {mulSparseMatImpl<float, 1>, mulSparseMatImpl<float, 3>},
-            {mulSparseMatImpl<double, 1>, mulSparseMatImpl<double, 3>}
+            {mulDhfMatImpl<float, float>, mulDhfMatImpl<float, Point3f>},
+            {mulDhfMatImpl<double, double>, mulDhfMatImpl<double, Point3d>}
         };
 
-        CV_DbgAssert(smat.depth() == CV_32F || smat.depth() == CV_64F);
-        CV_DbgAssert(src.depth() == smat.depth());
+        CV_DbgAssert(src.depth() == CV_32F || src.depth() == CV_64F);
         CV_DbgAssert(src.channels() == 1 || src.channels() == 3);
 
-        const func_t func = funcs[smat.depth() == CV_64F][src.channels() == 3];
+        const func_t func = funcs[src.depth() == CV_64F][src.channels() == 3];
 
-        func(smat, src, dst, isTranspose);
+        func(DHT, src, dst, dstSize, isTranspose);
     }
 
     template <typename T>
@@ -165,19 +366,21 @@ namespace
     template <typename T>
     void diffSignImpl(const Mat& src1, const Mat& src2, Mat& dst)
     {
-        CV_DbgAssert(src1.rows == 1);
         CV_DbgAssert(src1.type() == DataType<T>::type);
         CV_DbgAssert(src2.size() == src1.size());
         CV_DbgAssert(src2.type() == src1.type());
         CV_DbgAssert(dst.size() == src1.size());
         CV_DbgAssert(dst.type() == src1.type());
 
-        const T* src1Ptr = src1.ptr<T>();
-        const T* src2Ptr = src2.ptr<T>();
-        T* dstPtr = dst.ptr<T>();
+        for (int y = 0; y < src1.rows; ++y)
+        {
+            const T* src1Ptr = src1.ptr<T>(y);
+            const T* src2Ptr = src2.ptr<T>(y);
+            T* dstPtr = dst.ptr<T>(y);
 
-        for (int i = 0; i < src1.cols; ++i)
-            dstPtr[i] = diffSign(src1Ptr[i], src2Ptr[i]);
+            for (int x = 0; x < src1.cols; ++x)
+                dstPtr[x] = diffSign(src1Ptr[x], src2Ptr[x]);
+        }
     }
 
     void diffSign(const Mat& src1, const Mat& src2, Mat& dst)
@@ -205,16 +408,16 @@ namespace
         func(src1.reshape(1), src2.reshape(1), dst1cn);
     }
 
-    void calcBtvDiffTerm(const Mat& y, const SparseMat& DHF, const Mat& X, Mat& diffTerm, Mat& buf)
+    void calcBtvDiffTerm(const Mat& y, const DhfMat& DHF, const Mat& X, Mat& diffTerm, Mat& buf)
     {
         // degrade current estimated image
-        mulSparseMat(DHF, X, buf);
+        mulDhfMat(DHF, X, buf, y.size());
 
         // compere input and degraded image
         diffSign(buf, y, buf);
 
         // blur the subtructed vector with transposed matrix
-        mulSparseMat(DHF, buf, diffTerm, true);
+        mulDhfMat(DHF, buf, diffTerm, X.size(), true);
     }
 
     struct BtvDiffTermBody : ParallelLoopBody
@@ -222,7 +425,8 @@ namespace
         void operator ()(const Range& range) const;
 
         const vector<Mat>* y;
-        const vector<SparseMat>* DHF;
+        const vector<DhfMat>* DHF;
+        int count;
 
         Mat X;
 
@@ -232,12 +436,12 @@ namespace
 
     void BtvDiffTermBody::operator ()(const Range& range) const
     {
-        CV_DbgAssert(y && !y->empty());
-        CV_DbgAssert(DHF && DHF->size() == y->size());
-        CV_DbgAssert(diffTerms && diffTerms->size() == y->size());
-        CV_DbgAssert(bufs && bufs->size() == y->size());
+        CV_DbgAssert(y && !y->empty() && y->size() >= count);
+        CV_DbgAssert(DHF && DHF->size() >= count);
+        CV_DbgAssert(diffTerms && diffTerms->size() == count);
+        CV_DbgAssert(bufs && bufs->size() == count);
         CV_DbgAssert(range.start >= 0);
-        CV_DbgAssert(range.end <= y->size());
+        CV_DbgAssert(range.end <= count);
 
         Mat& buf = (*bufs)[range.start];
 
@@ -245,23 +449,24 @@ namespace
             calcBtvDiffTerm((*y)[i], (*DHF)[i], X, (*diffTerms)[i], buf);
     }
 
-    void calcBtvDiffTerms(const vector<Mat>& y, const vector<SparseMat>& DHF, const Mat& X, vector<Mat>& diffTerms, vector<Mat>& bufs)
+    void calcBtvDiffTerms(const vector<Mat>& y, const vector<DhfMat>& DHF, int count, const Mat& X, vector<Mat>& diffTerms, vector<Mat>& bufs)
     {
-        diffTerms.resize(y.size());
-        bufs.resize(y.size());
+        diffTerms.resize(count);
+        bufs.resize(count);
 
         BtvDiffTermBody body;
 
         body.y = &y;
         body.DHF = &DHF;
+        body.count = count;
         body.X = X;
         body.diffTerms = &diffTerms;
         body.bufs = &bufs;
 
-        parallel_for_(Range(0, y.size()), body);
+        parallel_for_(Range(0, count), body);
     }
 
-    template <typename T, int cn>
+    template <typename T, typename VT>
     struct BtvRegularizationBody : ParallelLoopBody
     {
         void operator ()(const Range& range) const;
@@ -272,11 +477,10 @@ namespace
         Mat_<T> _weight;
     };
 
-    template <typename T, int cn>
-    void BtvRegularizationBody<T, cn>::operator ()(const Range& range) const
+    template <typename T, typename VT>
+    void BtvRegularizationBody<T, VT>::operator ()(const Range& range) const
     {
-        CV_DbgAssert(src.depth() == DataType<T>::depth);
-        CV_DbgAssert(src.channels() == cn);
+        CV_DbgAssert(src.type() == DataType<VT>::type);
         CV_DbgAssert(dst.size() == src.size());
         CV_DbgAssert(dst.type() == src.type());
         CV_DbgAssert(ksize > 0);
@@ -285,23 +489,19 @@ namespace
 
         const T* weight = _weight[0];
 
-        typedef typename VecTraits<T, cn>::vec_t vec_t;
-
         for (int i = range.start; i < range.end; ++i)
         {
-            const vec_t* srcRow = src.ptr<vec_t>(i);
-            vec_t* dstRow = dst.ptr<vec_t>(i);
+            const VT* srcRow = src.ptr<VT>(i);
+            VT* dstRow = dst.ptr<VT>(i);
 
             for(int j = ksize; j < src.cols - ksize; ++j)
             {
-                vec_t dstVal = VecTraits<T, cn>::defaultValue();
-
-                const vec_t srcVal = srcRow[j];
+                const VT srcVal = srcRow[j];
 
                 for (int m = 0, count = 0; m <= ksize; ++m)
                 {
-                    const vec_t* srcRow2 = src.ptr<vec_t>(i - m);
-                    const vec_t* srcRow3 = src.ptr<vec_t>(i + m);
+                    const VT* srcRow2 = src.ptr<VT>(i - m);
+                    const VT* srcRow3 = src.ptr<VT>(i + m);
 
                     for (int l = ksize; l + m >= 0; --l, ++count)
                     {
@@ -309,27 +509,21 @@ namespace
                         CV_DbgAssert(j - l >= 0 && j - l < src.cols);
                         CV_DbgAssert(count < _weight.cols);
 
-                        dstVal += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
+                        dstRow[j] += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
                     }
                 }
-
-                dstRow[j] = dstVal;
             }
         }
     }
 
-    template <typename T, int cn>
-    void calcBtvRegularizationImpl(Size highResSize, const Mat& X_, Mat& dst_, int btvKernelSize, double alpha)
+    template <typename T, typename VT>
+    void calcBtvRegularizationImpl(const Mat& X, Mat& dst, int btvKernelSize, double alpha)
     {
-        CV_DbgAssert(X_.rows == 1);
-        CV_DbgAssert(X_.cols == highResSize.area());
         CV_DbgAssert(btvKernelSize > 0);
         CV_DbgAssert(alpha > 0);
 
-        dst_.create(X_.size(), X_.type());
-
-        Mat src = X_.reshape(X_.channels(), highResSize.height);
-        Mat dst = dst_.reshape(dst_.channels(), highResSize.height);
+        dst.create(X.size(), X.type());
+        dst.setTo(Scalar::all(0));
 
         const int ksize = (btvKernelSize - 1) / 2;
 
@@ -345,23 +539,23 @@ namespace
             }
         }
 
-        BtvRegularizationBody<T, cn> body;
+        BtvRegularizationBody<T, VT> body;
 
-        body.src = src;
+        body.src = X;
         body.dst = dst;
         body.ksize = ksize;
         body._weight = Mat_<T>(1, weightSize, weight);
 
-        parallel_for_(Range(ksize, src.rows - ksize), body);
+        parallel_for_(Range(ksize, X.rows - ksize), body);
     }
 
-    void calcBtvRegularization(Size highResSize, const Mat& X, Mat& dst, int btvKernelSize, double alpha)
+    void calcBtvRegularization(const Mat& X, Mat& dst, int btvKernelSize, double alpha)
     {
-        typedef void (*func_t)(Size highResSize, const Mat& X, Mat& dst, int btvKernelSize, double alpha);
+        typedef void (*func_t)(const Mat& X, Mat& dst, int btvKernelSize, double alpha);
         static const func_t funcs[2][2] =
         {
-            {calcBtvRegularizationImpl<float, 1>, calcBtvRegularizationImpl<float, 3>},
-            {calcBtvRegularizationImpl<double, 1>, calcBtvRegularizationImpl<double, 3>},
+            {calcBtvRegularizationImpl<float, float>, calcBtvRegularizationImpl<float, Point3f>},
+            {calcBtvRegularizationImpl<double, double>, calcBtvRegularizationImpl<double, Point3d>},
         };
 
         CV_DbgAssert(X.depth() == CV_32F || X.depth() == CV_64F);
@@ -369,47 +563,48 @@ namespace
 
         const func_t func = funcs[X.depth() == CV_64F][X.channels() == 3];
 
-        func(highResSize, X, dst, btvKernelSize, alpha);
+        func(X, dst, btvKernelSize, alpha);
     }
 }
 
-void cv::superres::BilateralTotalVariation::process(Size lowResSize, const vector<Mat>& y, const vector<SparseMat>& DHF, OutputArray dst)
+void cv::superres::BilateralTotalVariation::process(const vector<Mat>& y, const vector<DhfMat>& DHF, int count, OutputArray dst)
 {
+    CV_DbgAssert(count > 0);
     CV_DbgAssert(!y.empty());
-    CV_DbgAssert(y.size() == DHF.size());
+    CV_DbgAssert(y.size() >= count);
+    CV_DbgAssert(DHF.size() >= count);
 
+    Size lowResSize = y.front().size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
 #ifdef _DEBUG
-    for (size_t i = 0; i < y.size(); ++i)
+    for (size_t i = 0; i < count; ++i)
     {
-        CV_DbgAssert(y[i].rows == 1);
-        CV_DbgAssert(y[i].cols == lowResSize.area());
-        CV_DbgAssert(DHF[i].dims() == 2);
-        CV_DbgAssert(DHF[i].size(0) == lowResSize.area());
-        CV_DbgAssert(DHF[i].size(1) == highResSize.area());
+        CV_DbgAssert(y[i].size() == lowResSize);
+        CV_DbgAssert(DHF[i].coords.rows == lowResSize.area());
+        CV_DbgAssert(DHF[i].coords.cols == DHF[i].weights.cols);
     }
 #endif
 
     // create initial image by simple bi-cubic interpolation
 
-    resizeVec(lowResSize, highResSize, y.front(), X);
+    resize(y.front(), X, highResSize, 0, 0, INTER_CUBIC);
 
     // steepest descent method for L1 norm minimization
 
     for (int i = 0; i < iterations; ++i)
     {
         // diff terms
-        calcBtvDiffTerms(y, DHF, X, diffTerms, bufs);
+        calcBtvDiffTerms(y, DHF, count, X, diffTerms, bufs);
 
         // regularization term
 
         if (lambda > 0)
-            calcBtvRegularization(highResSize, X, regTerm, btvKernelSize, alpha);
+            calcBtvRegularization(X, regTerm, btvKernelSize, alpha);
 
         // creep ideal image, beta is parameter of the creeping speed.
 
-        for (size_t n = 0; n < y.size(); ++n)
+        for (size_t n = 0; n < count; ++n)
             addWeighted(X, 1.0, diffTerms[n], -beta, 0.0, X);
 
         // add smoothness term
@@ -418,9 +613,7 @@ void cv::superres::BilateralTotalVariation::process(Size lowResSize, const vecto
             addWeighted(X, 1.0, regTerm, -beta * lambda, 0.0, X);
     }
 
-    // re-convert 1D vecor structure to Mat image structure
-    Mat highRes = X.reshape(X.channels(), highResSize.height);
-    highRes.convertTo(dst, CV_8U);
+    X.convertTo(dst, CV_8U);
 }
 
 ///////////////////////////////////////////////////////////////
@@ -512,232 +705,10 @@ void cv::superres::BTV_Image::clear()
     images.clear();
 }
 
-namespace
-{
-    template <typename T>
-    class AffineMotion
-    {
-    public:
-        explicit AffineMotion(const Mat& M) : M(M) {}
-
-        Point2d calcCoord(Point base) const
-        {
-            Point2d res;
-            res.x = M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2);
-            res.y = M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2);
-
-            return res;
-        }
-
-    private:
-        Mat_<T> M;
-    };
-
-    template <typename T>
-    class PerspectiveMotion
-    {
-    public:
-        explicit PerspectiveMotion(const Mat& M) : M(M) {}
-
-        Point2d calcCoord(Point base) const
-        {
-            double w = 1.0 / (M(2, 0) * base.x + M(2, 1) * base.y + M(2, 2));
-
-            Point2d res;
-            res.x = (M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2)) * w;
-            res.y = (M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2)) * w;
-
-            return res;
-        }
-
-    private:
-        Mat_<T> M;
-    };
-
-    template <typename T>
-    class GeneralMotion
-    {
-    public:
-        GeneralMotion(const Mat& dx, const Mat& dy) : dx(dx), dy(dy) {}
-
-        Point2d calcCoord(Point base) const
-        {
-            Point2d res;
-            res.x = base.x + dx(base);
-            res.y = base.y + dy(base);
-
-            return res;
-        }
-
-    private:
-        Mat_<T> dx;
-        Mat_<T> dy;
-    };
-
-    template <typename T>
-    class BoxBlur
-    {
-    public:
-        BoxBlur(int kh, int kw) : kw(kw), kh(kh)
-        {
-            div = static_cast<T>(1.0 / (kw * kh));
-        }
-
-        T operator ()(int i, int j) const
-        {
-            CV_DbgAssert(i >= 0 && i < height());
-            CV_DbgAssert(j >= 0 && j < width());
-
-            return div;
-        }
-
-        int width() const { return kw; }
-        int height() const { return kh; }
-
-    private:
-        int kw;
-        int kh;
-        T div;
-    };
-
-    template <typename T>
-    class GaussBlur
-    {
-    public:
-        GaussBlur(int kh, int kw)
-        {
-            row = getGaussianKernel(kw, 0, DataType<T>::type);
-            col = getGaussianKernel(kh, 0, DataType<T>::type);
-
-            prow = row[0];
-            pcol = col[0];
-        }
-
-        T operator ()(int i, int j) const
-        {
-            CV_DbgAssert(i >= 0 && i < height());
-            CV_DbgAssert(j >= 0 && j < width());
-
-            return prow[i] * pcol[j];
-        }
-
-        int width() const { return row.rows; }
-        int height() const { return col.rows; }
-
-    private:
-        Mat_<T> row;
-        Mat_<T> col;
-        T* prow;
-        T* pcol;
-    };
-
-    template <typename T, class Motion, class Blur>
-    void calcDhfImpl(Size lowResSize, Size highResSize, int scale, const Motion& motion, const Blur& blur, SparseMat& DHF)
-    {
-        CV_DbgAssert(scale > 1);
-        CV_DbgAssert(DHF.type() == DataType<T>::type);
-        CV_DbgAssert(DHF.dims() == 2);
-        CV_DbgAssert(DHF.size(0) == lowResSize.area());
-        CV_DbgAssert(DHF.size(1) == highResSize.area());
-
-        for (int y = 0, lowResInd = 0; y < lowResSize.height; ++y)
-        {
-            for (int x = 0; x < lowResSize.width; ++x, ++lowResInd)
-            {
-                Point2d lowOrigCoord = motion.calcCoord(Point(x, y));
-
-                for (int i = 0; i < blur.height(); ++i)
-                {
-                    for (int j = 0; j < blur.width(); ++j)
-                    {
-                        const int X = cvFloor(lowOrigCoord.x * scale + j - blur.width() / 2);
-                        const int Y = cvFloor(lowOrigCoord.y * scale + i - blur.height() / 2);
-
-                        if (X >= 0 && X < highResSize.width && Y >= 0 && Y < highResSize.height)
-                            DHF.ref<T>(lowResInd, Y * highResSize.width + X) = blur(i, j);
-                    }
-                }
-            }
-        }
-    }
-
-    template <typename T, template <typename> class Blur>
-    void calcDHFCaller(Size lowResSize, int scale, SparseMat& DHF, int blurKernelSize, const Mat& m1, const Mat& m2)
-    {
-        CV_DbgAssert(scale > 1);
-
-        Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
-
-        const int sizes[] = {lowResSize.area(), highResSize.area()};
-        DHF.create(2, sizes, DataType<T>::type);
-
-        if (blurKernelSize < 0)
-            blurKernelSize = scale;
-
-        Blur<T> blur(blurKernelSize, blurKernelSize);
-
-        if (!m2.empty())
-        {
-            CV_DbgAssert(m1.type() == CV_32FC1);
-            CV_DbgAssert(m1.size() == lowResSize);
-            CV_DbgAssert(m1.size() == m2.size());
-            CV_DbgAssert(m1.type() == m2.type());
-
-            GeneralMotion<float> motion(m1, m2);
-
-            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
-        }
-        else if (m1.rows == 2)
-        {
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
-
-            AffineMotion<float> motion(m1);
-
-            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
-        }
-        else
-        {
-            CV_DbgAssert(m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
-
-            PerspectiveMotion<float> motion(m1);
-
-            calcDhfImpl<T>(lowResSize, highResSize, scale, motion, blur, DHF);
-        }
-    }
-
-    void calcDHF(Size lowResSize, int scale, SparseMat& DHF, int depth, BlurModel blurModel, int blurKernelSize, const Mat& m1, const Mat& m2 = Mat())
-    {
-        typedef void (*func_t)(Size lowResSize, int scale, SparseMat& DHF, int blurKernelSsize, const Mat& m1, const Mat& m2);
-        static const func_t funcs[2][2] =
-        {
-            {calcDHFCaller<float, BoxBlur>, calcDHFCaller<float, GaussBlur>},
-            {calcDHFCaller<double, BoxBlur>, calcDHFCaller<double, GaussBlur>}
-        };
-
-        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
-
-        funcs[depth == CV_64F][blurModel](lowResSize, scale, DHF, blurKernelSize, m1, m2);
-    }
-
-    void addDegFrame(const Mat& image, int scale, int depth, vector<Mat>& y, vector<SparseMat>& DHFs, BlurModel blurModel, int blurKernelSize, const Mat& m1, const Mat& m2 = Mat())
-    {
-        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
-
-        Mat workFrame;
-        image.convertTo(workFrame, depth);
-        y.push_back(workFrame.reshape(workFrame.channels(), 1));
-
-        SparseMat DHF;
-        calcDHF(image.size(), scale, DHF, depth, blurModel, blurKernelSize, m1, m2);
-        DHFs.push_back(DHF);
-    }
-}
-
 void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
 {
+    CV_DbgAssert(workDepth == CV_32F || workDepth == CV_64F);
+
     Mat src = _src.getMat();
 
     CV_DbgAssert(empty() || src.size() == images[0].size());
@@ -746,26 +717,28 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
 
     // calc DHF for all low-res images
 
-    vector<Mat> y;
-    vector<SparseMat> DHF;
+    y.resize(images.size() + 1);
+    DHF.resize(images.size() + 1);
 
-    y.reserve(images.size() + 1);
-    DHF.reserve(images.size() + 1);
-
-    addDegFrame(src, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, Mat_<float>::eye(2, 3));
+    int count = 1;
+    src.convertTo(y[0], workDepth);
+    DHF[0].build(src.size(), scale, static_cast<BlurModel>(blurModel), blurKernelSize, workDepth, Mat_<float>::eye(2, 3));
 
     for (size_t i = 0; i < images.size(); ++i)
     {
         const Mat& curImage = images[i];
 
-        Mat m1, m2;
         bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
-            addDegFrame(curImage, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, m1, m2);
+        {
+            curImage.convertTo(y[count], workDepth);
+            DHF[count].build(src.size(), scale, static_cast<BlurModel>(blurModel), blurKernelSize, workDepth, m1, m2);
+            ++count;
+        }
     }
 
-    BilateralTotalVariation::process(src.size(), y, DHF, dst);
+    BilateralTotalVariation::process(y, DHF, count, dst);
 }
 
 ///////////////////////////////////////////////////////////////
@@ -851,23 +824,28 @@ Mat cv::superres::BTV_Video::processImpl(const Mat& frame)
 
 void cv::superres::BTV_Video::processFrame(int idx)
 {
-    y.clear();
-    DHF.clear();
+    y.resize(frames.size());
+    DHF.resize(frames.size());
+
+    int count = 0;
 
     Mat src = at(idx, frames);
 
     for (size_t k = 0; k < frames.size(); ++k)
     {
-        const Mat& curImage = frames[k];
+        Mat curImage = frames[k];
 
-        Mat m1, m2;
         bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
-            addDegFrame(curImage, scale, workDepth, y, DHF, static_cast<BlurModel>(blurModel), blurKernelSize, m1, m2);
+        {
+            curImage.convertTo(y[count], workDepth);
+            DHF[count].build(src.size(), scale, static_cast<BlurModel>(blurModel), blurKernelSize, workDepth, m1, m2);
+            ++count;
+        }
     }
 
-    BilateralTotalVariation::process(src.size(), y, DHF, at(idx, results));
+    BilateralTotalVariation::process(y, DHF, count, at(idx, results));
 }
 
 void cv::superres::BTV_Video::addNewFrame(const Mat& frame)
@@ -891,50 +869,87 @@ namespace cv
 {
     namespace superres
     {
-        TEST(MulSparseMat, Identity)
+        TEST(MulDhfMat, Identity)
         {
-            Mat_<float> src(1, 10);
-            for (int i = 0; i < src.cols; ++i)
-                src(0, i) = i;
+            Mat_<float> src(10, 10);
+            theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
-            const int sizes[] = {src.cols, src.cols};
-            SparseMat_<float> smat(2, sizes);
-            for (int i = 0; i < src.cols; ++i)
-                smat.ref(i, i) = 1;
+            DhfMat DHF;
+            DHF.coords.create(src.size().area(), 1);
+            DHF.weights.create(1, 1, CV_32F);
+            DHF.weights.setTo(Scalar::all(1));
+            for (int y = 0; y < src.rows; ++y)
+                for (int x = 0; x < src.cols; ++x)
+                    DHF.coords(y * src.rows + x, 0) = Point(x, y);
 
             Mat_<float> dst;
-            mulSparseMat(smat, src, dst);
-
-            EXPECT_EQ(src.size(), dst.size());
+            mulDhfMat(DHF, src, dst, src.size());
 
             const double diff = norm(src, dst, NORM_INF);
             EXPECT_EQ(0, diff);
         }
 
-        TEST(MulSparseMat, PairSum)
+        TEST(MulDhfMat, PairSum)
         {
-            Mat_<float> src(1, 10);
-            for (int i = 0; i < src.cols; ++i)
-                src(0, i) = i;
+            Mat_<float> src(10, 10);
+            theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
-            const int sizes[] = {src.cols - 1, src.cols};
-            SparseMat_<float> smat(2, sizes);
-            for (int i = 0; i < src.cols - 1; ++i)
+            DhfMat DHF;
+            DHF.coords.create(src.size().area(), 2);
+            DHF.weights.create(1, 2, CV_32F);
+            DHF.weights.setTo(Scalar::all(1));
+            for (int y = 0; y < src.rows; ++y)
             {
-                smat.ref(i, i) = 1;
-                smat.ref(i, i + 1) = 1;
+                for (int x = 0; x < src.cols; ++x)
+                {
+                    DHF.coords(y * src.rows + x, 0) = Point(x, y);
+                    DHF.coords(y * src.rows + x, 1) = Point(min(x + 1, src.cols - 1), y);
+                }
             }
 
             Mat_<float> dst;
-            mulSparseMat(smat, src, dst);
+            mulDhfMat(DHF, src, dst, src.size());
 
-            EXPECT_EQ(1, dst.rows);
-            EXPECT_EQ(src.cols - 1, dst.cols);
-
-            for (int i = 0; i < src.cols - 1; ++i)
+            for (int y = 0; y < src.rows; ++y)
             {
-                const float gold = src(0, i) + src(0, i + 1);
-                EXPECT_EQ(gold, dst(0, i));
+                for (int x = 0; x < src.cols; ++x)
+                {
+                    const float gold = src(y, x) + src(y, min(x + 1, src.cols - 1));
+                    EXPECT_EQ(gold, dst(y, x));
+                }
+            }
+        }
+
+        TEST(DHF, build)
+        {
+            Size lowResSize(5, 5);
+            int scale = 2;
+            int blurKernelRadius = 2;
+
+            DhfMat DHF;
+            DHF.build(lowResSize, scale, BLUR_BOX, blurKernelRadius, CV_32F, Mat_<float>::eye(2, 3));
+
+            EXPECT_EQ(lowResSize.area(), DHF.coords.rows);
+            EXPECT_EQ(blurKernelRadius * blurKernelRadius, DHF.coords.cols);
+            EXPECT_EQ(blurKernelRadius * blurKernelRadius, DHF.weights.cols);
+
+            for (int y = 0; y < lowResSize.height; ++y)
+            {
+                for (int x = 0; x < lowResSize.width; ++x)
+                {
+                    for (int i = 0; i < blurKernelRadius; ++i)
+                    {
+                        for (int j = 0; j < blurKernelRadius; ++j)
+                        {
+                            Point gold(x * scale + j - blurKernelRadius / 2, y * scale + i - blurKernelRadius / 2);
+                            gold.x = clamp(gold.x, 0, lowResSize.width * scale - 1);
+                            gold.y = clamp(gold.y, 0, lowResSize.height * scale - 1);
+
+                            EXPECT_EQ(1.0 / (blurKernelRadius * blurKernelRadius), DHF.weights.at<float>(0, i * blurKernelRadius + j));
+                            EXPECT_EQ(gold, DHF.coords(y * lowResSize.width + x, i * blurKernelRadius + j));
+                        }
+                    }
+                }
             }
         }
 
@@ -958,17 +973,20 @@ namespace cv
 
         TEST(CalcBtvDiffTerm, Accuracy)
         {
-            Mat_<float> X(1, 9, 2.0f);
+            Mat_<float> X(3, 3, 2.0f);
 
-            const int sizes[] = {X.cols, X.cols};
-            SparseMat_<float> DHF(2, sizes);
-            for (int i = 0; i < X.cols; ++i)
-                DHF.ref(i, i) = 1;
+            DhfMat DHF;
+            DHF.coords.create(X.size().area(), 1);
+            DHF.weights.create(1, 1, CV_32F);
+            DHF.weights.setTo(Scalar::all(1));
+            for (int y = 0; y < X.rows; ++y)
+                for (int x = 0; x < X.cols; ++x)
+                    DHF.coords(y * X.rows + x, 0) = Point(x, y);
 
-            Mat_<float> y(1, 9);
+            Mat_<float> y(3, 3);
             y << 1,1,1,2,2,2,3,3,3;
 
-            Mat_<float> gold(1, 9);
+            Mat_<float> gold(3, 3);
             gold << 1,1,1,0,0,0,-1,-1,-1;
 
             Mat dst, buf;
@@ -981,3 +999,4 @@ namespace cv
 }
 
 #endif // WITH_TESTS
+
