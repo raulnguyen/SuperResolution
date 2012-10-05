@@ -38,17 +38,7 @@ namespace cv
 {
     namespace superres
     {
-        class DhfMat
-        {
-        public:
-            void build(Size lowResSize, int scale, BlurModel blurModel, int blurKernelSize, int depth, const Mat& m1, const Mat& m2 = Mat());
-
-            Mat_<Point> coords;
-            Mat weights;
-        };
-
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        // Thanks to https://github.com/Palethorn/SuperResolution implementation.
         class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation
         {
         protected:
@@ -56,7 +46,7 @@ namespace cv
 
             void setMotionModel(int motionModel);
 
-            void process(const std::vector<Mat>& y, const std::vector<DhfMat>& DHF, int count, OutputArray dst);
+            void process(const std::vector<Mat>& y, const std::vector<Mat>& DHF, int count, OutputArray dst);
 
             int scale;
             int iterations;
@@ -76,6 +66,7 @@ namespace cv
             std::vector<Mat> diffTerms;
             std::vector<Mat> bufs;
             Mat regTerm;
+            Mat blurWeights;
         };
 
         class SUPER_RESOLUTION_NO_EXPORT BTV_Image : public ImageSuperResolution, private BilateralTotalVariation
@@ -98,7 +89,7 @@ namespace cv
 
             std::vector<Mat> images;
             std::vector<Mat> y;
-            std::vector<DhfMat> DHF;
+            std::vector<Mat> DHF;
             Mat m1, m2;
         };
 
@@ -125,7 +116,7 @@ namespace cv
             std::vector<Mat> frames;
             std::vector<Mat> results;
             std::vector<Mat> y;
-            std::vector<DhfMat> DHF;
+            std::vector<Mat> DHF;
             Mat m1, m2;
 
             int storePos;
