@@ -66,8 +66,8 @@ int main(int argc, const char* argv[])
     Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION);
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName));
-    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName)); superResSource->nextFrame();
+    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName)); bicubicSource->nextFrame();
 
     superRes->setFrameSource(superResSource);
 
