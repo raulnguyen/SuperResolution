@@ -29,6 +29,8 @@ option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static on
 option(BUILD_SAMPLE_APPS "Build sample applications" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
+option(BUILD_WITH_CUDA "Build with CUDA support" OFF)
+
 set(BIN_INSTALL_DIR "bin")
 set(LIB_INSTALL_DIR "lib")
 set(INCLUDE_INSTALL_DIR "include")
@@ -41,6 +43,17 @@ include_directories("${CMAKE_BINARY_DIR}/lib")
 
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIR})
+
+if(BUILD_WITH_CUDA)
+    find_package(CUDA REQUIRED)
+    list(APPEND CUDA_NVCC_FLAGS ${OpenCV_COMPUTE_CAPABILITIES})
+    include_directories(${CUDA_INCLUDE_DIRS})
+    if(BUILD_SHARED_LIBS)
+        if(UNIX OR APPLE)
+            list(APPEND CUDA_NVCC_FLAGS "-Xcompiler -fPIC")
+        endif()
+    endif()
+endif()
 
 ############ Subdirectories ############
 
@@ -119,6 +132,8 @@ message(STATUS "")
 message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
 message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
 message(STATUS "Build tests               : ${BUILD_TESTS}")
+message(STATUS "")
+message(STATUS "CUDA support : ${BUILD_WITH_CUDA}")
 
 message(STATUS "")
 message(STATUS "============== C/C++ options ================")

@@ -11,6 +11,8 @@ file(GLOB HEADER_FILES "include/*.h" "include/*.hpp")
 file(GLOB SOURCE_FILES "src/*.c" "src/*.cpp")
 file(GLOB INTERNAL_HEADER_FILES "src/*.h" "src/*.hpp")
 
+set(ALL_BUILD_FILES ${HEADER_FILES} ${SOURCE_FILES} ${INTERNAL_HEADER_FILES})
+
 include(GenerateExportHeader)
 
 add_compiler_export_flags()
@@ -19,11 +21,23 @@ if(BUILD_TESTS)
     add_definitions(-DWITH_TESTS)
 endif()
 
-add_library(${TARGET_NAME} ${HEADER_FILES} ${SOURCE_FILES} ${INTERNAL_HEADER_FILES})
+if(BUILD_WITH_CUDA)
+    add_definitions(-DWITH_CUDA)
+    file(GLOB CUDA_SOURCE_FILES "src/*.cu")
+    CUDA_COMPILE(CUDA_OBJECT_FILES ${CUDA_SOURCE_FILES})
+    set_source_files_properties(${CUDA_OBJECT_FILES} PROPERTIES GENERATED TRUE)
+    list(APPEND ALL_BUILD_FILES ${CUDA_SOURCE_FILES} ${CUDA_OBJECT_FILES})
+endif()
+
+add_library(${TARGET_NAME} ${ALL_BUILD_FILES})
 
 generate_export_header(${TARGET_NAME})
 
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
+
+if(BUILD_WITH_CUDA)
+    target_link_libraries(${TARGET_NAME} ${CUDA_LIBRARIES})
+endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 
