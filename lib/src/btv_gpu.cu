@@ -22,3 +22,46 @@
 // ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#include <opencv2/gpu/device/common.hpp>
+#include <opencv2/gpu/device/transform.hpp>
+#include <opencv2/gpu/device/functional.hpp>
+
+using namespace cv::gpu;
+using namespace cv::gpu::device;
+
+namespace
+{
+    template <typename T> __device__ __forceinline__ T diffSign(T a, T b)
+    {
+        return a > b ? static_cast<T>(1) : a < b ? static_cast<T>(-1) : static_cast<T>(0);
+    }
+
+    template <typename T> struct DiffSign : binary_function<T, T, T>
+    {
+        __device__ __forceinline__ T operator ()(T a, T b) const
+        {
+            return diffSign(a, b);
+        }
+    };
+}
+
+namespace cv { namespace gpu { namespace device
+{
+    template <> struct TransformFunctorTraits< DiffSign<float> > : DefaultTransformFunctorTraits< DiffSign<float> >
+    {
+        enum { smart_block_dim_y = 8 };
+        enum { smart_shift = 4 };
+    };
+}}}
+
+namespace btv_device
+{
+    template <typename T> void diffSign(const PtrStepSzb& src1, const PtrStepSzb& src2, const PtrStepSzb& dst, cudaStream_t stream)
+    {
+        transform((PtrStepSz<T>)src1, (PtrStepSz<T>)src2, (PtrStepSz<T>)dst, DiffSign<T>(), WithOutMask(), stream);
+    }
+
+    template void diffSign<float>(const PtrStepSzb& src1, const PtrStepSzb& src2, const PtrStepSzb& dst, cudaStream_t stream);
+    template void diffSign<double>(const PtrStepSzb& src1, const PtrStepSzb& src2, const PtrStepSzb& dst, cudaStream_t stream);
+}
