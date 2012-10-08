@@ -110,7 +110,6 @@ namespace cv
             double lambda;
             double alpha;
             int btvKernelSize;
-            int workDepth;
             int motionModel;
             int blurModel;
             int blurKernelSize;
@@ -124,9 +123,47 @@ namespace cv
             gpu::GpuMat regTerm;
             gpu::GpuMat buf;
             gpu::GpuMat d_dst;
+            gpu::GpuMat yBuf;
 
             cusparseHandle_t handle;
             cusparseMatDescr_t descr;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Image_GPU : public ImageSuperResolution, private BilateralTotalVariation_GPU
+        {
+        public:
+            static bool init();
+            static Ptr<ImageSuperResolution> create();
+
+            BTV_Image_GPU();
+
+            AlgorithmInfo* info() const;
+
+            void train(InputArrayOfArrays images);
+
+            bool empty() const;
+            void clear();
+
+            void process(InputArray src, OutputArray dst);
+
+        private:
+            void trainImpl(const std::vector<Mat>& images);
+
+            std::vector<Mat> images;
+            std::vector<gpu::GpuMat> y;
+            std::vector<GpuSparseMat_CSR> DHF;
+
+            Mat m1, m2;
+
+            gpu::GpuMat srcBuf;
+            gpu::GpuMat curImageBuf;
+
+            std::vector<float> valsBuf;
+            std::vector<int> rowPtrBuf;
+            std::vector<int> colIndBuf;
+
+            Mat_<float> blurWeights;
+            int curBlurModel;
         };
     }
 }

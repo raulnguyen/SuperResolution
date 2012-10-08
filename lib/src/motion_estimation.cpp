@@ -28,6 +28,7 @@
 #include <opencv2/videostab/global_motion.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/gpu/gpu.hpp>
+#include "cpu_gpu_transform.hpp"
 
 using namespace std;
 using namespace cv;
@@ -37,51 +38,6 @@ using namespace cv::gpu;
 
 namespace
 {
-    Mat getCpuMat(InputArray m, Mat& buf)
-    {
-        if (m.kind() == _InputArray::GPU_MAT)
-        {
-            m.getGpuMat().download(buf);
-            return buf;
-        }
-
-        return m.getMat();
-    }
-
-    void setCpuMat(const Mat& src, OutputArray dst)
-    {
-        if (dst.kind() == _InputArray::GPU_MAT)
-            dst.getGpuMatRef().upload(src);
-
-        src.copyTo(dst);
-    }
-
-    GpuMat getGpuMat(InputArray m, GpuMat& buf)
-    {
-        if (m.kind() == _InputArray::GPU_MAT)
-            return m.getGpuMat();
-
-        Mat h_m = m.getMat();
-
-        ensureSizeIsEnough(h_m.size(), h_m.type(), buf);
-        buf.upload(h_m);
-
-        return buf;
-    }
-
-    void setGpuMat(const GpuMat& src, OutputArray dst)
-    {
-        if (dst.kind() == _InputArray::GPU_MAT)
-            src.copyTo(dst.getGpuMatRef());
-
-        dst.create(src.size(), src.type());
-
-        Mat h_m = dst.getMat();
-        src.download(h_m);
-    }
-
-    //////////////////////
-
     class GlobalMotionEstimator : public MotionEstimator
     {
     public:

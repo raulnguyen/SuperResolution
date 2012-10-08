@@ -130,7 +130,7 @@ int main(int argc, const char* argv[])
     const string imageFileName = cmd.get<string>("image");
     const int scale = cmd.get<int>("scale");
 
-    Mat gold = imread(imageFileName);
+    Mat gold = imread(imageFileName, 0);
     if (gold.empty())
     {
         cerr << "Can't open image " << imageFileName << endl;
@@ -155,7 +155,7 @@ int main(int argc, const char* argv[])
         degImages[i] = createDegradedImage(gold, move, theta, scale);
     }
 
-    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION);
+    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION, true);
 
     superRes->set("scale", scale);
 

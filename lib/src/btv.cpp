@@ -202,6 +202,7 @@ namespace
         }
         else if (motionModel < MM_HOMOGRAPHY)
         {
+            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
             CV_DbgAssert(m1.cols == 3);
             CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
 
@@ -679,7 +680,7 @@ void cv::superres::BTV_Image::trainImpl(const vector<Mat>& images)
 {
 #ifdef _DEBUG
     CV_DbgAssert(!images.empty());
-    CV_DbgAssert(images[0].type() == CV_8UC3);
+    CV_DbgAssert(images[0].type() == CV_8UC1 || images[0].type() == CV_8UC3);
 
     for (size_t i = 1; i < images.size(); ++i)
     {

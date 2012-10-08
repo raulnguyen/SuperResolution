@@ -23,41 +23,51 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
+#include "cpu_gpu_transform.hpp"
 
-#ifndef __IMAGE_SUPER_RESOLUTION_HPP__
-#define __IMAGE_SUPER_RESOLUTION_HPP__
+using namespace cv;
+using namespace cv::gpu;
+using namespace cv::superres;
 
-#include <opencv2/core/core.hpp>
-#include "super_resolution_common.hpp"
-#include "super_resolution_export.h"
-
-namespace cv
+Mat cv::superres::getCpuMat(InputArray m, Mat& buf)
 {
-    namespace superres
+    if (m.kind() == _InputArray::GPU_MAT)
     {
-        enum ImageSRMethod
-        {
-            IMAGE_SR_EXAMPLE_BASED,
-            IMAGE_SR_BILATERAL_TOTAL_VARIATION,
-            IMAGE_SR_METHOD_MAX
-        };
-
-        class SUPER_RESOLUTION_EXPORT ImageSuperResolution : public Algorithm
-        {
-        public:
-            static Ptr<ImageSuperResolution> create(ImageSRMethod method, bool useGpu = false);
-
-            virtual ~ImageSuperResolution();
-
-            virtual void train(InputArrayOfArrays images) = 0;
-
-            virtual bool empty() const = 0;
-            virtual void clear() = 0;
-
-            virtual void process(InputArray src, OutputArray dst) = 0;
-        };
+        m.getGpuMat().download(buf);
+        return buf;
     }
+
+    return m.getMat();
 }
 
-#endif // __IMAGE_SUPER_RESOLUTION_HPP__
+void cv::superres::setCpuMat(const Mat& src, OutputArray dst)
+{
+    if (dst.kind() == _InputArray::GPU_MAT)
+        dst.getGpuMatRef().upload(src);
+
+    src.copyTo(dst);
+}
+
+GpuMat cv::superres::getGpuMat(InputArray m, GpuMat& buf)
+{
+    if (m.kind() == _InputArray::GPU_MAT)
+        return m.getGpuMat();
+
+    Mat h_m = m.getMat();
+
+    ensureSizeIsEnough(h_m.size(), h_m.type(), buf);
+    buf.upload(h_m);
+
+    return buf;
+}
+
+void cv::superres::setGpuMat(const GpuMat& src, OutputArray dst)
+{
+    if (dst.kind() == _InputArray::GPU_MAT)
+        src.copyTo(dst.getGpuMatRef());
+
+    dst.create(src.size(), src.type());
+
+    Mat h_m = dst.getMat();
+    src.download(h_m);
+}

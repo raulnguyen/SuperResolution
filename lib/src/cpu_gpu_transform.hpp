@@ -25,39 +25,23 @@
 
 #pragma once
 
-#ifndef __IMAGE_SUPER_RESOLUTION_HPP__
-#define __IMAGE_SUPER_RESOLUTION_HPP__
+#ifndef __CPU_GPU_TRANSFORM_HPP__
+#define __CPU_GPU_TRANSFORM_HPP__
 
 #include <opencv2/core/core.hpp>
-#include "super_resolution_common.hpp"
+#include <opencv2/core/gpumat.hpp>
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        enum ImageSRMethod
-        {
-            IMAGE_SR_EXAMPLE_BASED,
-            IMAGE_SR_BILATERAL_TOTAL_VARIATION,
-            IMAGE_SR_METHOD_MAX
-        };
+        SUPER_RESOLUTION_NO_EXPORT Mat getCpuMat(InputArray m, Mat& buf);
+        SUPER_RESOLUTION_NO_EXPORT void setCpuMat(const Mat& src, OutputArray dst);
 
-        class SUPER_RESOLUTION_EXPORT ImageSuperResolution : public Algorithm
-        {
-        public:
-            static Ptr<ImageSuperResolution> create(ImageSRMethod method, bool useGpu = false);
-
-            virtual ~ImageSuperResolution();
-
-            virtual void train(InputArrayOfArrays images) = 0;
-
-            virtual bool empty() const = 0;
-            virtual void clear() = 0;
-
-            virtual void process(InputArray src, OutputArray dst) = 0;
-        };
+        SUPER_RESOLUTION_NO_EXPORT gpu::GpuMat getGpuMat(InputArray m, gpu::GpuMat& buf);
+        SUPER_RESOLUTION_NO_EXPORT void setGpuMat(const gpu::GpuMat& src, OutputArray dst);
     }
 }
 
-#endif // __IMAGE_SUPER_RESOLUTION_HPP__
+#endif // __CPU_GPU_TRANSFORM_HPP__
