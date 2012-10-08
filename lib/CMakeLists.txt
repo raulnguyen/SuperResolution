@@ -36,7 +36,7 @@ generate_export_header(${TARGET_NAME})
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
 
 if(BUILD_WITH_CUDA)
-    target_link_libraries(${TARGET_NAME} ${CUDA_LIBRARIES})
+    target_link_libraries(${TARGET_NAME} ${CUDA_LIBRARIES} ${CUDA_cusparse_LIBRARY})
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
