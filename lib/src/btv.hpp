@@ -67,6 +67,7 @@ namespace cv
             std::vector<Mat> bufs;
             Mat regTerm;
             Mat blurWeights;
+            int curBlurModel;
         };
 
         class SUPER_RESOLUTION_NO_EXPORT BTV_Image : public ImageSuperResolution, private BilateralTotalVariation
