@@ -959,16 +959,16 @@ namespace cv
 
         TEST(DiffSign, Accuracy)
         {
-            Mat_<int> src1(1, 3);
+            Mat_<float> src1(1, 3);
             src1 << 1, 2, 3;
 
-            Mat_<int> src2(1, 3);
+            Mat_<float> src2(1, 3);
             src2 << 3, 2, 1;
 
-            Mat_<int> gold(1, 3);
+            Mat_<float> gold(1, 3);
             gold << -1, 0, 1;
 
-            Mat_<int> dst(1, 3);
+            Mat_<float> dst(1, 3);
             diffSign(src1, src2, dst);
 
             const double diff = norm(gold, dst, NORM_INF);

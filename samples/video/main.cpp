@@ -116,6 +116,7 @@ int main(int argc, const char* argv[])
         Mat bicubic;
         resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 
+        imshow("Input", frame);
         imshow("Super Resolution", result);
         imshow("BiCubic", bicubic);
 

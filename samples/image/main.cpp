@@ -130,7 +130,7 @@ int main(int argc, const char* argv[])
     const string imageFileName = cmd.get<string>("image");
     const int scale = cmd.get<int>("scale");
 
-    Mat gold = imread(imageFileName, 0);
+    Mat gold = imread(imageFileName, IMREAD_GRAYSCALE);
     if (gold.empty())
     {
         cerr << "Can't open image " << imageFileName << endl;
