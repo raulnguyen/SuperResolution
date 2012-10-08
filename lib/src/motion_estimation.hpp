@@ -38,7 +38,7 @@ namespace cv
         class SUPER_RESOLUTION_NO_EXPORT MotionEstimator
         {
         public:
-            static Ptr<MotionEstimator> create(MotionModel model);
+            static Ptr<MotionEstimator> create(MotionModel model, bool useGpu = false);
 
             virtual ~MotionEstimator();
 

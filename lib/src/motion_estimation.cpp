@@ -27,14 +27,61 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/videostab/global_motion.hpp>
 #include <opencv2/video/tracking.hpp>
+#include <opencv2/gpu/gpu.hpp>
 
 using namespace std;
 using namespace cv;
 using namespace cv::videostab;
 using namespace cv::superres;
+using namespace cv::gpu;
 
 namespace
 {
+    Mat getCpuMat(InputArray m, Mat& buf)
+    {
+        if (m.kind() == _InputArray::GPU_MAT)
+        {
+            m.getGpuMat().download(buf);
+            return buf;
+        }
+
+        return m.getMat();
+    }
+
+    void setCpuMat(const Mat& src, OutputArray dst)
+    {
+        if (dst.kind() == _InputArray::GPU_MAT)
+            dst.getGpuMatRef().upload(src);
+
+        src.copyTo(dst);
+    }
+
+    GpuMat getGpuMat(InputArray m, GpuMat& buf)
+    {
+        if (m.kind() == _InputArray::GPU_MAT)
+            return m.getGpuMat();
+
+        Mat h_m = m.getMat();
+
+        ensureSizeIsEnough(h_m.size(), h_m.type(), buf);
+        buf.upload(h_m);
+
+        return buf;
+    }
+
+    void setGpuMat(const GpuMat& src, OutputArray dst)
+    {
+        if (dst.kind() == _InputArray::GPU_MAT)
+            src.copyTo(dst.getGpuMatRef());
+
+        dst.create(src.size(), src.type());
+
+        Mat h_m = dst.getMat();
+        src.download(h_m);
+    }
+
+    //////////////////////
+
     class GlobalMotionEstimator : public MotionEstimator
     {
     public:
@@ -44,6 +91,8 @@ namespace
 
     private:
         Ptr<ImageMotionEstimatorBase> motionEstimator;
+        Mat h_frame0;
+        Mat h_frame1;
     };
 
     GlobalMotionEstimator::GlobalMotionEstimator(MotionModel model)
@@ -52,20 +101,60 @@ namespace
         motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
     }
 
-    bool GlobalMotionEstimator::estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2)
+    bool GlobalMotionEstimator::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
     {
+        Mat frame0 = getCpuMat(_frame0, h_frame0);
+        Mat frame1 = getCpuMat(_frame1, h_frame1);
+
+        CV_DbgAssert(frame0.size() == frame1.size());
+        CV_DbgAssert(frame0.type() == frame1.type());
+
         bool ok;
-        Mat M = motionEstimator->estimate(frame0.getMat(), frame1.getMat(), &ok);
+        Mat M = motionEstimator->estimate(frame0, frame1, &ok);
 
-        if (motionEstimator->motionModel() == MM_HOMOGRAPHY)
-            M.copyTo(m1);
-        else
-            M(Rect(0, 0, 3, 2)).copyTo(m1);
-
+        setCpuMat(M, m1);
         m2.release();
 
         return ok;
     }
+
+    //////////////////////
+
+    class GlobalMotionEstimator_GPU : public MotionEstimator
+    {
+    public:
+        explicit GlobalMotionEstimator_GPU(MotionModel model);
+
+        bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2);
+
+    private:
+        KeypointBasedMotionEstimatorGpu motionEstimator;
+        GpuMat d_frame0;
+        GpuMat d_frame1;
+    };
+
+    GlobalMotionEstimator_GPU::GlobalMotionEstimator_GPU(MotionModel model) : motionEstimator(new MotionEstimatorRansacL2(model))
+    {
+    }
+
+    bool GlobalMotionEstimator_GPU::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
+    {
+        GpuMat frame0 = getGpuMat(_frame0, d_frame0);
+        GpuMat frame1 = getGpuMat(_frame1, d_frame1);
+
+        CV_DbgAssert(frame0.size() == frame1.size());
+        CV_DbgAssert(frame0.type() == frame1.type());
+
+        bool ok;
+        Mat M = motionEstimator.estimate(frame0, frame1, &ok);
+
+        setCpuMat(M, m1);
+        m2.release();
+
+        return ok;
+    }
+
+    //////////////////////
 
     class GeneralMotionEstimator : public MotionEstimator
     {
@@ -73,6 +162,8 @@ namespace
         bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2);
 
     private:
+        Mat h_frame0;
+        Mat h_frame1;
         Mat frame0gray;
         Mat frame1gray;
         Mat flow;
@@ -81,29 +172,35 @@ namespace
 
     bool GeneralMotionEstimator::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
     {
-        Mat frame0 = _frame0.getMat();
-        Mat frame1 = _frame1.getMat();
+        Mat frame0 = getCpuMat(_frame0, h_frame0);
+        Mat frame1 = getCpuMat(_frame1, h_frame1);
 
         CV_DbgAssert(frame0.size() == frame1.size());
         CV_DbgAssert(frame0.type() == frame1.type());
 
+        Mat input0, input1;
+
         if (frame0.channels() == 1)
         {
-            frame0.copyTo(frame0gray);
-            frame1.copyTo(frame1gray);
+            input0 = frame0;
+            input1 = frame1;
         }
         else if (frame0.channels() == 3)
         {
             cvtColor(frame0, frame0gray, COLOR_BGR2GRAY);
             cvtColor(frame1, frame1gray, COLOR_BGR2GRAY);
+            input0 = frame0gray;
+            input1 = frame1gray;
         }
         else
         {
             cvtColor(frame0, frame0gray, COLOR_BGRA2GRAY);
             cvtColor(frame1, frame1gray, COLOR_BGRA2GRAY);
+            input0 = frame0gray;
+            input1 = frame1gray;
         }
 
-        calcOpticalFlowFarneback(frame0gray, frame1gray, flow,
+        calcOpticalFlowFarneback(input0, input1, flow,
                                  /*pyrScale =*/ 0.5,
                                  /*numLevels =*/ 5,
                                  /*winSize =*/ 13,
@@ -114,15 +211,78 @@ namespace
 
         split(flow, ch);
 
-        ch[0].copyTo(m1);
-        ch[1].copyTo(m2);
+        setCpuMat(ch[0], m1);
+        setCpuMat(ch[1], m2);
+
+        return true;
+    }
+
+    //////////////////////
+
+    class GeneralMotionEstimator_GPU : public MotionEstimator
+    {
+    public:
+        bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2);
+
+    private:
+        GpuMat d_frame0;
+        GpuMat d_frame1;
+        GpuMat frame0gray;
+        GpuMat frame1gray;
+        FarnebackOpticalFlow flow;
+        GpuMat flowx;
+        GpuMat flowy;
+    };
+
+    bool GeneralMotionEstimator_GPU::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
+    {
+        GpuMat frame0 = getGpuMat(_frame0, d_frame0);
+        GpuMat frame1 = getGpuMat(_frame1, d_frame1);
+
+        CV_DbgAssert(frame0.size() == frame1.size());
+        CV_DbgAssert(frame0.type() == frame1.type());
+
+        GpuMat input0, input1;
+
+        if (frame0.channels() == 1)
+        {
+            input0 = frame0;
+            input1 = frame1;
+        }
+        else if (frame0.channels() == 3)
+        {
+            cvtColor(frame0, frame0gray, COLOR_BGR2GRAY);
+            cvtColor(frame1, frame1gray, COLOR_BGR2GRAY);
+            input0 = frame0gray;
+            input1 = frame1gray;
+        }
+        else
+        {
+            cvtColor(frame0, frame0gray, COLOR_BGRA2GRAY);
+            cvtColor(frame1, frame1gray, COLOR_BGRA2GRAY);
+            input0 = frame0gray;
+            input1 = frame1gray;
+        }
+
+        flow(input0, input1, flowx, flowy);
+
+        setGpuMat(flowx, m1);
+        setGpuMat(flowy, m2);
 
         return true;
     }
 }
 
-Ptr<MotionEstimator> MotionEstimator::create(MotionModel model)
+Ptr<MotionEstimator> MotionEstimator::create(MotionModel model, bool useGpu)
 {
+    if (useGpu)
+    {
+        if (model <= MM_HOMOGRAPHY)
+            return Ptr<MotionEstimator>(new GlobalMotionEstimator_GPU(model));
+
+        return Ptr<MotionEstimator>(new GeneralMotionEstimator_GPU);
+    }
+
     if (model <= MM_HOMOGRAPHY)
         return Ptr<MotionEstimator>(new GlobalMotionEstimator(model));
 
