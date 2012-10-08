@@ -24,9 +24,11 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "super_resolution.hpp"
+#include <sstream>
 #include "exampled_based.hpp"
-#include "btv.hpp"
 #include "nlm.hpp"
+#include "btv.hpp"
+#include "btv_gpu.hpp"
 
 using namespace std;
 using namespace cv;
@@ -39,8 +41,11 @@ bool cv::superres::initModule_superres()
 
     all &= ExampledBased::init();
     all &= BTV_Image::init();
+    all &= BTV_Image_GPU::init();
 
     all &= Nlm::init();
+    all &= BTV_Video::init();
+    all &= BTV_Video_GPU::init();
 
     return all;
 }
@@ -48,7 +53,7 @@ bool cv::superres::initModule_superres()
 ////////////////////////////////////////////////////
 // ImageSuperResolution
 
-Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMethod method)
+Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMethod method, bool useGpu)
 {
     typedef Ptr<ImageSuperResolution> (*func_t)();
     static const func_t funcs[] =
@@ -56,10 +61,35 @@ Ptr<ImageSuperResolution> cv::superres::ImageSuperResolution::create(ImageSRMeth
         ExampledBased::create,
         BTV_Image::create
     };
+    static const func_t gpu_funcs[] =
+    {
+        0,
+        BTV_Image_GPU::create
+    };
 
     CV_DbgAssert(method >= IMAGE_SR_EXAMPLE_BASED && method < IMAGE_SR_METHOD_MAX);
 
-    return funcs[method]();
+    func_t func;
+    if (useGpu)
+        func = gpu_funcs[method];
+    else
+        func = funcs[method];
+
+    if (func == 0)
+    {
+        static const char* method_str[] =
+        {
+            "Exampled Based",
+            "Bilateral Total Variation"
+        };
+
+        ostringstream msg;
+        msg << "There is no gpu implementation for [" << method_str[method] << "] method";
+
+        CV_Error(CV_StsBadFunc, msg.str());
+    }
+
+    return func();
 }
 
 cv::superres::ImageSuperResolution::~ImageSuperResolution()
@@ -69,7 +99,7 @@ cv::superres::ImageSuperResolution::~ImageSuperResolution()
 ////////////////////////////////////////////////////
 // VideoSuperResolution
 
-Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMethod method)
+Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMethod method, bool useGpu)
 {
     typedef Ptr<VideoSuperResolution> (*func_t)();
     static const func_t funcs[] =
@@ -77,10 +107,35 @@ Ptr<VideoSuperResolution> cv::superres::VideoSuperResolution::create(VideoSRMeth
         Nlm::create,
         BTV_Video::create
     };
+    static const func_t gpu_funcs[] =
+    {
+        0,
+        BTV_Video_GPU::create
+    };
 
     CV_DbgAssert(method >= VIDEO_SR_NLM && method < VIDEO_SR_METHOD_MAX);
 
-    return funcs[method]();
+    func_t func;
+    if (useGpu)
+        func = gpu_funcs[method];
+    else
+        func = funcs[method];
+
+    if (func == 0)
+    {
+        static const char* method_str[] =
+        {
+            "Non Local Means",
+            "Bilateral Total Variation"
+        };
+
+        ostringstream msg;
+        msg << "There is no gpu implementation for [" << method_str[method] << "] method";
+
+        CV_Error(CV_StsBadFunc, msg.str());
+    }
+
+    return func();
 }
 
 cv::superres::VideoSuperResolution::~VideoSuperResolution()

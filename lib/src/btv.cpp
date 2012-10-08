@@ -202,6 +202,7 @@ namespace
         }
         else if (motionModel < MM_HOMOGRAPHY)
         {
+            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
             CV_DbgAssert(m1.cols == 3);
             CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
 
@@ -263,10 +264,10 @@ void cv::superres::BilateralTotalVariation::setMotionModel(int motionModel)
 namespace
 {
     template <typename T, typename VT>
-    void mulDhfMatImpl(const Mat& DHT, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose)
+    void mulDhfMatImpl(const Mat& DHF, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose)
     {
-        CV_DbgAssert(DHT.type() == CV_32SC2);
-        CV_DbgAssert(DHT.cols == blurWeights.cols);
+        CV_DbgAssert(DHF.type() == CV_32SC2);
+        CV_DbgAssert(DHF.cols == blurWeights.cols);
         CV_DbgAssert(blurWeights.type() == DataType<T>::type);
         CV_DbgAssert(src.type() == DataType<VT>::type);
 
@@ -277,7 +278,7 @@ namespace
 
         if (isTranspose)
         {
-            CV_DbgAssert(DHT.rows == src.size().area());
+            CV_DbgAssert(DHF.rows == src.size().area());
 
             for (int y = 0, lowResInd = 0; y < src.rows; ++y)
             {
@@ -285,9 +286,9 @@ namespace
 
                 for (int x = 0; x < src.cols; ++x, ++lowResInd)
                 {
-                    const Point* coordPtr = DHT.ptr<Point>(lowResInd);
+                    const Point* coordPtr = DHF.ptr<Point>(lowResInd);
 
-                    for (int i = 0; i < DHT.cols; ++i)
+                    for (int i = 0; i < DHF.cols; ++i)
                     {
                         const Point highResCoord = coordPtr[i];
                         const double w = weights[i];
@@ -302,7 +303,7 @@ namespace
         }
         else
         {
-            CV_DbgAssert(DHT.rows == dstSize.area());
+            CV_DbgAssert(DHF.rows == dstSize.area());
 
             for (int y = 0, lowResInd = 0; y < dstSize.height; ++y)
             {
@@ -310,9 +311,9 @@ namespace
 
                 for (int x = 0; x < dstSize.width; ++x, ++lowResInd)
                 {
-                    const Point* coordPtr = DHT.ptr<Point>(lowResInd);
+                    const Point* coordPtr = DHF.ptr<Point>(lowResInd);
 
-                    for (int i = 0; i < DHT.cols; ++i)
+                    for (int i = 0; i < DHF.cols; ++i)
                     {
                         const Point highResCoord = coordPtr[i];
                         const double w = weights[i];
@@ -327,9 +328,9 @@ namespace
         }
     }
 
-    void mulDhfMat(const Mat& DHT, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose = false)
+    void mulDhfMat(const Mat& DHF, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose = false)
     {
-        typedef void (*func_t)(const Mat& DHT, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose);
+        typedef void (*func_t)(const Mat& DHF, const Mat& blurWeights, const Mat& src, Mat& dst, Size dstSize, bool isTranspose);
         static const func_t funcs[2][2] =
         {
             {mulDhfMatImpl<float, float>, mulDhfMatImpl<float, Point3f>},
@@ -341,7 +342,7 @@ namespace
 
         const func_t func = funcs[src.depth() == CV_64F][src.channels() == 3];
 
-        func(DHT, blurWeights, src, dst, dstSize, isTranspose);
+        func(DHF, blurWeights, src, dst, dstSize, isTranspose);
     }
 
     template <typename T>
@@ -382,23 +383,18 @@ namespace
     void diffSign(const Mat& src1, const Mat& src2, Mat& dst)
     {
         CV_DbgAssert(src1.channels() == src2.channels());
-        CV_DbgAssert(src1.depth() >= CV_8U && src1.depth() <= CV_64F);
+        CV_DbgAssert(src1.depth() == CV_32F || src1.depth() == CV_64F);
 
         typedef void (*func_t)(const Mat& src1, const Mat& src2, Mat& dst);
         static const func_t funcs[] =
         {
-            diffSignImpl<uchar>,
-            diffSignImpl<schar>,
-            diffSignImpl<ushort>,
-            diffSignImpl<short>,
-            diffSignImpl<int>,
             diffSignImpl<float>,
             diffSignImpl<double>
         };
 
         dst.create(src1.size(), src1.type());
 
-        const func_t func = funcs[src1.depth()];
+        const func_t func = funcs[src1.depth() == CV_64F];
 
         Mat dst1cn = dst.reshape(1);
         func(src1.reshape(1), src2.reshape(1), dst1cn);
@@ -569,7 +565,6 @@ namespace
 void cv::superres::BilateralTotalVariation::process(const vector<Mat>& y, const vector<Mat>& DHF, int count, OutputArray dst)
 {
     CV_DbgAssert(count > 0);
-    CV_DbgAssert(!y.empty());
     CV_DbgAssert(y.size() >= count);
     CV_DbgAssert(DHF.size() >= count);
     CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
@@ -685,7 +680,7 @@ void cv::superres::BTV_Image::trainImpl(const vector<Mat>& images)
 {
 #ifdef _DEBUG
     CV_DbgAssert(!images.empty());
-    CV_DbgAssert(images[0].type() == CV_8UC3);
+    CV_DbgAssert(images[0].type() == CV_8UC1 || images[0].type() == CV_8UC3);
 
     for (size_t i = 1; i < images.size(); ++i)
     {
@@ -861,7 +856,7 @@ void cv::superres::BTV_Video::processFrame(int idx)
 
 void cv::superres::BTV_Video::addNewFrame(const Mat& frame)
 {
-    CV_DbgAssert(frame.type() == CV_8UC3);
+    CV_DbgAssert(frame.type() == CV_8UC1 || frame.type() == CV_8UC3);
     CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
 
     ++storePos;
@@ -1008,4 +1003,3 @@ namespace cv
 }
 
 #endif // WITH_TESTS
-

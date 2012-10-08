@@ -89,8 +89,10 @@ namespace cv
             void trainImpl(const std::vector<Mat>& images);
 
             std::vector<Mat> images;
+
             std::vector<Mat> y;
             std::vector<Mat> DHF;
+
             Mat m1, m2;
         };
 
@@ -116,8 +118,10 @@ namespace cv
 
             std::vector<Mat> frames;
             std::vector<Mat> results;
+
             std::vector<Mat> y;
             std::vector<Mat> DHF;
+
             Mat m1, m2;
 
             int storePos;

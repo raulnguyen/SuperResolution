@@ -45,6 +45,35 @@ using namespace cv::videostab;
         cout << msg << " Time : " << tm.getTimeSec() << " sec" << endl; \
     }
 
+class GrayScaleVideoSource : public IFrameSource
+{
+public:
+    explicit GrayScaleVideoSource(const Ptr<IFrameSource>& base) : base(base) {}
+
+    void reset();
+    Mat nextFrame();
+
+private:
+    Ptr<IFrameSource> base;
+    Mat buf;
+};
+
+void GrayScaleVideoSource::reset()
+{
+    base->reset();
+}
+
+Mat GrayScaleVideoSource::nextFrame()
+{
+    Mat frame = base->nextFrame();
+
+    if (frame.channels() == 1)
+        return frame;
+
+    cvtColor(frame, buf, frame.channels() == 3 ? COLOR_BGR2GRAY : COLOR_BGRA2GRAY);
+    return buf;
+}
+
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
@@ -63,11 +92,11 @@ int main(int argc, const char* argv[])
     const string inputVideoName = cmd.get<string>("video");
     const int scale = cmd.get<int>("scale");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION, true);
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName)); superResSource->nextFrame();
-    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName)); bicubicSource->nextFrame();
+    Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); superResSource->nextFrame();
+    Ptr<IFrameSource> bicubicSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); bicubicSource->nextFrame();
 
     superRes->setFrameSource(superResSource);
 

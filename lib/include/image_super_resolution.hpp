@@ -46,7 +46,7 @@ namespace cv
         class SUPER_RESOLUTION_EXPORT ImageSuperResolution : public Algorithm
         {
         public:
-            static Ptr<ImageSuperResolution> create(ImageSRMethod method);
+            static Ptr<ImageSuperResolution> create(ImageSRMethod method, bool useGpu = false);
 
             virtual ~ImageSuperResolution();
 

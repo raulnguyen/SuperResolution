@@ -22,3 +22,26 @@
 // ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#pragma once
+
+#ifndef __CPU_GPU_TRANSFORM_HPP__
+#define __CPU_GPU_TRANSFORM_HPP__
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/core/gpumat.hpp>
+#include "super_resolution_export.h"
+
+namespace cv
+{
+    namespace superres
+    {
+        SUPER_RESOLUTION_NO_EXPORT Mat getCpuMat(InputArray m, Mat& buf);
+        SUPER_RESOLUTION_NO_EXPORT void setCpuMat(const Mat& src, OutputArray dst);
+
+        SUPER_RESOLUTION_NO_EXPORT gpu::GpuMat getGpuMat(InputArray m, gpu::GpuMat& buf);
+        SUPER_RESOLUTION_NO_EXPORT void setGpuMat(const gpu::GpuMat& src, OutputArray dst);
+    }
+}
+
+#endif // __CPU_GPU_TRANSFORM_HPP__

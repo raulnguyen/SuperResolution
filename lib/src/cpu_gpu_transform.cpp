@@ -23,52 +23,51 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
+#include "cpu_gpu_transform.hpp"
 
-#ifndef __VIDEO_SUPER_RESOLUTION_HPP__
-#define __VIDEO_SUPER_RESOLUTION_HPP__
+using namespace cv;
+using namespace cv::gpu;
+using namespace cv::superres;
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/videostab/frame_source.hpp>
-#include "super_resolution_common.hpp"
-#include "super_resolution_export.h"
-
-namespace cv
+Mat cv::superres::getCpuMat(InputArray m, Mat& buf)
 {
-    namespace superres
+    if (m.kind() == _InputArray::GPU_MAT)
     {
-        using videostab::IFrameSource;
-
-        enum VideoSRMethod
-        {
-            VIDEO_SR_NLM,
-            VIDEO_SR_BILATERAL_TOTAL_VARIATION,
-            VIDEO_SR_METHOD_MAX
-        };
-
-        class SUPER_RESOLUTION_EXPORT VideoSuperResolution : public Algorithm, public IFrameSource
-        {
-        public:
-            static Ptr<VideoSuperResolution> create(VideoSRMethod method, bool useGpu = false);
-
-            virtual ~VideoSuperResolution();
-
-            void setFrameSource(const Ptr<IFrameSource>& frameSource);
-
-            void reset();
-            Mat nextFrame();
-
-        protected:
-            VideoSuperResolution();
-
-            virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
-            virtual Mat processImpl(const Mat& frame) = 0;
-
-        private:
-            Ptr<IFrameSource> frameSource;
-            bool firstCall;
-        };
+        m.getGpuMat().download(buf);
+        return buf;
     }
+
+    return m.getMat();
 }
 
-#endif // __VIDEO_SUPER_RESOLUTION_HPP__
+void cv::superres::setCpuMat(const Mat& src, OutputArray dst)
+{
+    if (dst.kind() == _InputArray::GPU_MAT)
+        dst.getGpuMatRef().upload(src);
+
+    src.copyTo(dst);
+}
+
+GpuMat cv::superres::getGpuMat(InputArray m, GpuMat& buf)
+{
+    if (m.kind() == _InputArray::GPU_MAT)
+        return m.getGpuMat();
+
+    Mat h_m = m.getMat();
+
+    ensureSizeIsEnough(h_m.size(), h_m.type(), buf);
+    buf.upload(h_m);
+
+    return buf;
+}
+
+void cv::superres::setGpuMat(const GpuMat& src, OutputArray dst)
+{
+    if (dst.kind() == _InputArray::GPU_MAT)
+        src.copyTo(dst.getGpuMatRef());
+
+    dst.create(src.size(), src.type());
+
+    Mat h_m = dst.getMat();
+    src.download(h_m);
+}
