@@ -856,7 +856,7 @@ void cv::superres::BTV_Video::processFrame(int idx)
 
 void cv::superres::BTV_Video::addNewFrame(const Mat& frame)
 {
-    CV_DbgAssert(frame.type() == CV_8UC3);
+    CV_DbgAssert(frame.type() == CV_8UC1 || frame.type() == CV_8UC3);
     CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
 
     ++storePos;

@@ -27,6 +27,7 @@
 #include <opencv2/core/internal.hpp>
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/gpu/stream_accessor.hpp>
+#include <opencv2/videostab/ring_buffer.hpp>
 #include "cpu_gpu_transform.hpp"
 #ifdef WITH_TESTS
     #include <cuda_runtime.h>
@@ -269,96 +270,7 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
 }
 
 ///////////////////////////////////////////////////////////////
-// BTV_Image_GPU
-
-namespace cv
-{
-    namespace superres
-    {
-        typedef void (Algorithm::*IntSetter)(int);
-
-        CV_INIT_ALGORITHM(BTV_Image_GPU, "ImageSuperResolution.BilateralTotalVariation_GPU",
-                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
-                                               "Scale factor.");
-                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
-                                               "Iteration count.");
-                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
-                                               "Asymptotic value of steepest descent method.");
-                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
-                                               "Weight parameter to balance data term and smoothness term.");
-                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
-                                               "Parameter of spacial distribution in btv.");
-                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                               "Kernel size of btv filter.");
-                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Image_GPU::setMotionModel,
-                                               "Motion model between frames.");
-                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
-                                               "Blur model.");
-                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
-                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
-    }
-}
-
-bool cv::superres::BTV_Image_GPU::init()
-{
-    return !BTV_Image_GPU_info_auto.name().empty();
-}
-
-Ptr<ImageSuperResolution> cv::superres::BTV_Image_GPU::create()
-{
-    return Ptr<ImageSuperResolution>(new BTV_Image_GPU);
-}
-
-cv::superres::BTV_Image_GPU::BTV_Image_GPU()
-{
-    curBlurModel = -1;
-}
-
-void cv::superres::BTV_Image_GPU::train(InputArrayOfArrays _images)
-{
-    vector<Mat> images;
-
-    if (_images.kind() == _InputArray::STD_VECTOR_MAT)
-        _images.getMatVector(images);
-    else
-    {
-        Mat image = _images.getMat();
-        images.push_back(image);
-    }
-
-    trainImpl(images);
-}
-
-void cv::superres::BTV_Image_GPU::trainImpl(const vector<Mat>& images)
-{
-#ifdef _DEBUG
-    CV_DbgAssert(!images.empty());
-    CV_DbgAssert(images[0].type() == CV_8UC1 || images[0].type() == CV_8UC3);
-
-    for (size_t i = 1; i < images.size(); ++i)
-    {
-        CV_DbgAssert(images[i].size() == images[0].size());
-        CV_DbgAssert(images[i].type() == images[0].type());
-    }
-
-    if (!this->images.empty())
-    {
-        CV_DbgAssert(images[0].size() == this->images[0].size());
-    }
-#endif
-
-    this->images.insert(this->images.end(), images.begin(), images.end());
-}
-
-bool cv::superres::BTV_Image_GPU::empty() const
-{
-    return images.empty();
-}
-
-void cv::superres::BTV_Image_GPU::clear()
-{
-    images.clear();
-}
+// calcDhf
 
 namespace
 {
@@ -526,6 +438,98 @@ namespace
     }
 }
 
+///////////////////////////////////////////////////////////////
+// BTV_Image_GPU
+
+namespace cv
+{
+    namespace superres
+    {
+        typedef void (Algorithm::*IntSetter)(int);
+
+        CV_INIT_ALGORITHM(BTV_Image_GPU, "ImageSuperResolution.BilateralTotalVariation_GPU",
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                               "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
+                                               "Iteration count.");
+                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
+                                               "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
+                                               "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
+                                               "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
+                                               "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Image_GPU::setMotionModel,
+                                               "Motion model between frames.");
+                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
+                                               "Blur model.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
+                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
+    }
+}
+
+bool cv::superres::BTV_Image_GPU::init()
+{
+    return !BTV_Image_GPU_info_auto.name().empty();
+}
+
+Ptr<ImageSuperResolution> cv::superres::BTV_Image_GPU::create()
+{
+    return Ptr<ImageSuperResolution>(new BTV_Image_GPU);
+}
+
+cv::superres::BTV_Image_GPU::BTV_Image_GPU()
+{
+    curBlurModel = -1;
+}
+
+void cv::superres::BTV_Image_GPU::train(InputArrayOfArrays _images)
+{
+    vector<Mat> images;
+
+    if (_images.kind() == _InputArray::STD_VECTOR_MAT)
+        _images.getMatVector(images);
+    else
+    {
+        Mat image = _images.getMat();
+        images.push_back(image);
+    }
+
+    trainImpl(images);
+}
+
+void cv::superres::BTV_Image_GPU::trainImpl(const vector<Mat>& images)
+{
+#ifdef _DEBUG
+    CV_DbgAssert(!images.empty());
+    CV_DbgAssert(images[0].type() == CV_8UC1 || images[0].type() == CV_8UC3);
+
+    for (size_t i = 1; i < images.size(); ++i)
+    {
+        CV_DbgAssert(images[i].size() == images[0].size());
+        CV_DbgAssert(images[i].type() == images[0].type());
+    }
+
+    if (!this->images.empty())
+    {
+        CV_DbgAssert(images[0].size() == this->images[0].size());
+    }
+#endif
+
+    this->images.insert(this->images.end(), images.begin(), images.end());
+}
+
+bool cv::superres::BTV_Image_GPU::empty() const
+{
+    return images.empty();
+}
+
+void cv::superres::BTV_Image_GPU::clear()
+{
+    images.clear();
+}
+
 void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
 {
     CV_DbgAssert(scale > 1);
@@ -559,10 +563,9 @@ void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
     for (size_t i = 0; i < images.size(); ++i)
     {
         const Mat& curImage = images[i];
-
         curImageBuf.upload(curImage);
 
-        bool ok = motionEstimator->estimate(curImage, src, m1, m2);
+        bool ok = motionEstimator->estimate(curImageBuf, src, m1, m2);
 
         if (ok)
         {
@@ -574,6 +577,140 @@ void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
     }
 
     BilateralTotalVariation_GPU::process(y, DHF, count, dst);
+}
+
+///////////////////////////////////////////////////////////////
+// BTV_Video_GPU
+
+namespace cv
+{
+    namespace superres
+    {
+        CV_INIT_ALGORITHM(BTV_Video_GPU, "VideoSuperResolution.BilateralTotalVariation_GPU",
+                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
+                                               "Radius of the temporal search area.");
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
+                                               "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
+                                               "Iteration count.");
+                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
+                                               "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
+                                               "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
+                                               "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
+                                               "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Video_GPU::setMotionModel,
+                                              "Motion model between frames.");
+                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
+                                               "Blur model.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
+                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
+    }
+}
+
+bool cv::superres::BTV_Video_GPU::init()
+{
+    return !BTV_Video_GPU_info_auto.name().empty();
+}
+
+Ptr<VideoSuperResolution> cv::superres::BTV_Video_GPU::create()
+{
+    return Ptr<VideoSuperResolution>(new BTV_Video_GPU);
+}
+
+cv::superres::BTV_Video_GPU::BTV_Video_GPU()
+{
+    temporalAreaRadius = 4;
+}
+
+void cv::superres::BTV_Video_GPU::initImpl(Ptr<IFrameSource>& frameSource)
+{
+    const int cacheSize = 2 * temporalAreaRadius + 1;
+
+    frames.resize(cacheSize);
+    results.resize(cacheSize);
+
+    y.reserve(cacheSize);
+    DHF.reserve(cacheSize);
+
+    storePos = -1;
+    procPos = storePos - temporalAreaRadius;
+    outPos = procPos - temporalAreaRadius - 1;
+
+    for (int t = -temporalAreaRadius; t <= temporalAreaRadius; ++t)
+    {
+        Mat frame = frameSource->nextFrame();
+
+        CV_Assert(!frame.empty());
+
+        addNewFrame(frame);
+    }
+
+    for (int i = 0; i <= procPos; ++i)
+        processFrame(i);
+}
+
+Mat cv::superres::BTV_Video_GPU::processImpl(const Mat& frame)
+{
+    addNewFrame(frame);
+    processFrame(procPos);
+    return at(outPos, results);
+}
+
+void cv::superres::BTV_Video_GPU::processFrame(int idx)
+{
+    CV_DbgAssert(scale > 1);
+    CV_DbgAssert(blurKernelSize > 0);
+    CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
+
+    if (blurKernelSize < 0)
+        blurKernelSize = scale;
+
+    if (blurWeights.cols != blurKernelSize * blurKernelSize || curBlurModel != blurModel)
+    {
+        calcBlurWeights(static_cast<BlurModel>(blurModel), blurKernelSize, blurWeights);
+        curBlurModel = blurModel;
+    }
+
+    y.resize(frames.size());
+    DHF.resize(frames.size());
+
+    int count = 0;
+
+    Mat src = at(idx, frames);
+    srcBuf.upload(src);
+
+    for (size_t k = 0; k < frames.size(); ++k)
+    {
+        Mat curImage = frames[k];
+        curImageBuf.upload(curImage);
+
+        bool ok = motionEstimator->estimate(curImageBuf, srcBuf, m1, m2);
+
+        if (ok)
+        {
+            createContinuous(curImageBuf.size(), CV_32FC(src.channels()), y[count]);
+            curImageBuf.convertTo(y[count], CV_32F);
+            calcDhf(src.size(), scale, blurKernelSize, m1, m2, static_cast<MotionModel>(motionModel), blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[count]);
+            ++count;
+        }
+    }
+
+    BilateralTotalVariation_GPU::process(y, DHF, count, at(idx, results));
+}
+
+void cv::superres::BTV_Video_GPU::addNewFrame(const Mat& frame)
+{
+    CV_DbgAssert(frame.type() == CV_8UC1);
+    CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
+
+    ++storePos;
+    ++procPos;
+    ++outPos;
+
+    frame.copyTo(at(storePos, frames));
 }
 
 ///////////////////////////////////////////////////////////////

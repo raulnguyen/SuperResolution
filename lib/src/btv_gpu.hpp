@@ -32,6 +32,7 @@
 #include <cusparse_v2.h>
 #include <opencv2/gpu/gpu.hpp>
 #include "image_super_resolution.hpp"
+#include "video_super_resolution.hpp"
 #include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
@@ -150,8 +151,52 @@ namespace cv
             void trainImpl(const std::vector<Mat>& images);
 
             std::vector<Mat> images;
+
             std::vector<gpu::GpuMat> y;
             std::vector<GpuSparseMat_CSR> DHF;
+
+            Mat m1, m2;
+
+            gpu::GpuMat srcBuf;
+            gpu::GpuMat curImageBuf;
+
+            std::vector<float> valsBuf;
+            std::vector<int> rowPtrBuf;
+            std::vector<int> colIndBuf;
+
+            Mat_<float> blurWeights;
+            int curBlurModel;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Video_GPU : public VideoSuperResolution, private BilateralTotalVariation_GPU
+        {
+        public:
+            static bool init();
+            static Ptr<VideoSuperResolution> create();
+
+            AlgorithmInfo* info() const;
+
+            BTV_Video_GPU();
+
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(const Mat& frame);
+
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
+
+            int temporalAreaRadius;
+
+            std::vector<Mat> frames;
+            std::vector<Mat> results;
+
+            std::vector<gpu::GpuMat> y;
+            std::vector<GpuSparseMat_CSR> DHF;
+
+            int storePos;
+            int procPos;
+            int outPos;
 
             Mat m1, m2;
 

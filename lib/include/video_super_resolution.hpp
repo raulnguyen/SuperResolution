@@ -49,7 +49,7 @@ namespace cv
         class SUPER_RESOLUTION_EXPORT VideoSuperResolution : public Algorithm, public IFrameSource
         {
         public:
-            static Ptr<VideoSuperResolution> create(VideoSRMethod method);
+            static Ptr<VideoSuperResolution> create(VideoSRMethod method, bool useGpu = false);
 
             virtual ~VideoSuperResolution();
 
