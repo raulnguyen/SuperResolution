@@ -245,22 +245,22 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
 
     // create initial image by simple bi-cubic interpolation
 
-    y.front().copyTo(yBuf);
-
     createContinuous(highResSize, y.front().type(), X);
+    createContinuous(highResSize, y.front().type(), Xout);
+
+    y.front().copyTo(yBuf);
     resize(yBuf, X, highResSize, 0, 0, INTER_CUBIC);
 
     // steepest descent method for L1 norm minimization
 
     for (int i = 0; i < iterations; ++i)
     {
-        X.copyTo(Xout);
-
         // diff terms
-        for (int i = 0; i < count; ++i)
+
+        for (int k = 0; k < count; ++k)
         {
-            calcBtvDiffTerm(y[i], DHF[i], X, diffTerm, buf, handle, descr);
-            addWeighted(Xout, 1.0, diffTerm, -beta, 0.0, Xout);
+            calcBtvDiffTerm(y[k], DHF[k], X, diffTerm, buf, handle, descr);
+            addWeighted(k == 0 ? X : Xout, 1.0, diffTerm, -beta, 0.0, Xout);
         }
 
         // regularization term
@@ -271,10 +271,10 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
             addWeighted(Xout, 1.0, regTerm, -beta * lambda, 0.0, Xout);
         }
 
-        Xout.copyTo(X);
+        Xout.swap(X);
     }
 
-    Xout.convertTo(d_dst, CV_8U);
+    X.convertTo(d_dst, CV_8U);
     setGpuMat(d_dst, dst);
 }
 
