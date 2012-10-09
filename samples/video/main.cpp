@@ -79,6 +79,7 @@ int main(int argc, const char* argv[])
     CommandLineParser cmd(argc, argv,
         "{ video v | text.avi | Input video }"
         "{ scale s | 4        | Scale factor }"
+        "{ gpu     |          | Use GPU }"
         "{ help h  |          | Print help message }"
     );
 
@@ -91,8 +92,9 @@ int main(int argc, const char* argv[])
 
     const string inputVideoName = cmd.get<string>("video");
     const int scale = cmd.get<int>("scale");
+    const bool useGpu = cmd.has("gpu");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION, true);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION, useGpu);
     superRes->set("scale", scale);
 
     Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); superResSource->nextFrame();
