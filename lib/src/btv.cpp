@@ -769,6 +769,11 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
     BilateralTotalVariation::process(y, DHF, count, dst);
 }
 
+void cv::superres::BTV_Image::setMotionModel(int motionModel)
+{
+    BilateralTotalVariation::setMotionModel(motionModel);
+}
+
 ///////////////////////////////////////////////////////////////
 // BTV_Video
 
@@ -889,6 +894,11 @@ void cv::superres::BTV_Video::addNewFrame(const Mat& frame)
     ++outPos;
 
     frame.copyTo(at(storePos, frames));
+}
+
+void cv::superres::BTV_Video::setMotionModel(int motionModel)
+{
+    BilateralTotalVariation::setMotionModel(motionModel);
 }
 
 ///////////////////////////////////////////////////////////////

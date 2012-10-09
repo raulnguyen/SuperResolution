@@ -588,6 +588,11 @@ void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
     BilateralTotalVariation_GPU::process(y, DHF, count, dst);
 }
 
+void cv::superres::BTV_Image_GPU::setMotionModel(int motionModel)
+{
+    BilateralTotalVariation_GPU::setMotionModel(motionModel);
+}
+
 ///////////////////////////////////////////////////////////////
 // BTV_Video_GPU
 
@@ -720,6 +725,11 @@ void cv::superres::BTV_Video_GPU::addNewFrame(const Mat& frame)
     ++outPos;
 
     frame.copyTo(at(storePos, frames));
+}
+
+void cv::superres::BTV_Video_GPU::setMotionModel(int motionModel)
+{
+    BilateralTotalVariation_GPU::setMotionModel(motionModel);
 }
 
 ///////////////////////////////////////////////////////////////

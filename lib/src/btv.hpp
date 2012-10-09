@@ -92,6 +92,7 @@ namespace cv
 
         private:
             void trainImpl(const std::vector<Mat>& images);
+            void setMotionModel(int motionModel);
 
             std::vector<Mat> images;
 
@@ -118,6 +119,7 @@ namespace cv
         private:
             void addNewFrame(const Mat& frame);
             void processFrame(int idx);
+            void setMotionModel(int motionModel);
 
             int temporalAreaRadius;
 
