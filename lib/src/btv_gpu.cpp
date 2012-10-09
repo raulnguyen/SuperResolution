@@ -52,7 +52,7 @@ namespace btv_device
     void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst, cudaStream_t stream);
 
     template <int cn>
-    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream);
+    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
 }
 
 ///////////////////////////////////////////////////////////////
@@ -175,9 +175,26 @@ namespace
         mulSparseMat(handle, descr, DHF, buf, diffTerm, X.size(), true);
     }
 
-    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize, double alpha)
+    void calcBtvWeights(int btvKernelSize, float alpha, Mat_<float>& btvWeights)
     {
-        typedef void (*func_t)(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream);
+        CV_DbgAssert(btvKernelSize > 0);
+        CV_DbgAssert(alpha > 0);
+
+        btvWeights.create(1, btvKernelSize * btvKernelSize);
+        float* weights = btvWeights.ptr<float>();
+
+        const int ksize = (btvKernelSize - 1) / 2;
+
+        for (int m = 0, count = 0; m <= ksize; ++m)
+        {
+            for (int l = ksize; l + m >= 0; --l, ++count)
+                weights[count] = pow(alpha, std::abs(m) + std::abs(l));
+        }
+    }
+
+    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize, const Mat_<float>& btvWeights)
+    {
+        typedef void (*func_t)(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
         static const func_t funcs[] =
         {
             0,
@@ -190,26 +207,15 @@ namespace
         CV_DbgAssert(X.depth() == CV_32F);
         CV_DbgAssert(X.channels() == 1 || X.channels() == 3 || X.channels() == 4);
         CV_DbgAssert(btvKernelSize > 0 && btvKernelSize <= 16);
-        CV_DbgAssert(alpha > 0);
+        CV_DbgAssert(btvWeights.rows == 1);
+        CV_DbgAssert(btvWeights.cols == btvKernelSize * btvKernelSize);
 
         dst.create(X.size(), X.type());
         dst.setTo(Scalar::all(0));
 
         const int ksize = (btvKernelSize - 1) / 2;
 
-        const int weightSize = btvKernelSize * btvKernelSize;
-        AutoBuffer<float> weight_(weightSize);
-        float* weight = weight_;
-        for (int m = 0, count = 0; m <= ksize; ++m)
-        {
-            for (int l = ksize; l + m >= 0; --l, ++count)
-            {
-                CV_DbgAssert(count < weightSize);
-                weight[count] = pow(static_cast<float>(alpha), std::abs(m) + std::abs(l));
-            }
-        }
-
-        funcs[X.channels()](X, dst, ksize, weight, weightSize, 0);
+        funcs[X.channels()](X, dst, ksize, btvWeights[0], btvWeights.cols, 0);
     }
 }
 
@@ -221,6 +227,9 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
 
     Size lowResSize = y.front().size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
+
+    if (btvWeights.cols != btvKernelSize * btvKernelSize)
+        calcBtvWeights(btvKernelSize, alpha, btvWeights);
 
 #ifdef _DEBUG
     for (size_t i = 0; i < count; ++i)
@@ -258,7 +267,7 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
 
         if (lambda > 0)
         {
-            calcBtvRegularization(X, regTerm, btvKernelSize, alpha);
+            calcBtvRegularization(X, regTerm, btvKernelSize, btvWeights);
             addWeighted(Xout, 1.0, regTerm, -beta * lambda, 0.0, Xout);
         }
 

@@ -118,7 +118,7 @@ namespace
 namespace btv_device
 {
     template <int cn>
-    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream)
+    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream)
     {
         typedef typename TypeVec<float, cn>::vec_type src_t;
 
@@ -134,7 +134,7 @@ namespace btv_device
             cudaSafeCall( cudaDeviceSynchronize() );
     }
 
-    template void calcBtvRegularization<1>(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream);
-    template void calcBtvRegularization<3>(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream);
-    template void calcBtvRegularization<4>(PtrStepSzb src, PtrStepSzb dst, int ksize, float* weights, int count, cudaStream_t stream);
+    template void calcBtvRegularization<1>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
+    template void calcBtvRegularization<3>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
+    template void calcBtvRegularization<4>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
 }

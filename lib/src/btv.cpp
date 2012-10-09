@@ -461,6 +461,40 @@ namespace
         parallel_for_(Range(0, count), body);
     }
 
+    template <typename T>
+    void calcBtvWeightsImpl(int btvKernelSize, double alpha, Mat& btvWeights)
+    {
+        CV_DbgAssert(btvKernelSize > 0);
+        CV_DbgAssert(alpha > 0);
+
+        btvWeights.create(1, btvKernelSize * btvKernelSize, DataType<T>::type);
+        T* weights = btvWeights.ptr<T>();
+
+        const int ksize = (btvKernelSize - 1) / 2;
+
+        for (int m = 0, count = 0; m <= ksize; ++m)
+        {
+            for (int l = ksize; l + m >= 0; --l, ++count)
+                weights[count] = pow(static_cast<T>(alpha), std::abs(m) + std::abs(l));
+        }
+    }
+
+    void calcBtvWeights(int btvKernelSize, double alpha, Mat& btvWeights, int depth)
+    {
+        typedef void (*func_t)(int btvKernelSize, double alpha, Mat& btvWeights);
+        static const func_t funcs[] =
+        {
+            calcBtvWeightsImpl<float>,
+            calcBtvWeightsImpl<double>
+        };
+
+        CV_DbgAssert(depth == CV_32F || depth == CV_64F);
+
+        const func_t func = funcs[depth == CV_64F];
+
+        func(btvKernelSize, alpha, btvWeights);
+    }
+
     template <typename T, typename VT>
     struct BtvRegularizationBody : ParallelLoopBody
     {
@@ -469,7 +503,7 @@ namespace
         Mat src;
         mutable Mat dst;
         int ksize;
-        Mat_<T> _weight;
+        const T* weight;
     };
 
     template <typename T, typename VT>
@@ -481,8 +515,6 @@ namespace
         CV_DbgAssert(ksize > 0);
         CV_DbgAssert(range.start >= 0);
         CV_DbgAssert(range.end <= src.rows);
-
-        const T* weight = _weight[0];
 
         for (int i = range.start; i < range.end; ++i)
         {
@@ -502,7 +534,6 @@ namespace
                     {
                         CV_DbgAssert(j + l >= 0 && j + l < src.cols);
                         CV_DbgAssert(j - l >= 0 && j - l < src.cols);
-                        CV_DbgAssert(count < _weight.cols);
 
                         dstRow[j] += weight[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
                     }
@@ -512,41 +543,32 @@ namespace
     }
 
     template <typename T, typename VT>
-    void calcBtvRegularizationImpl(const Mat& X, Mat& dst, int btvKernelSize, double alpha)
+    void calcBtvRegularizationImpl(const Mat& X, Mat& dst, int btvKernelSize, const Mat& btvWeights)
     {
+        CV_DbgAssert(X.type() == DataType<VT>::type);
         CV_DbgAssert(btvKernelSize > 0);
-        CV_DbgAssert(alpha > 0);
+        CV_DbgAssert(btvWeights.type() == DataType<T>::type);
+        CV_DbgAssert(btvWeights.rows == 1);
+        CV_DbgAssert(btvWeights.cols == btvKernelSize * btvKernelSize);
 
         dst.create(X.size(), X.type());
         dst.setTo(Scalar::all(0));
 
         const int ksize = (btvKernelSize - 1) / 2;
 
-        const int weightSize = btvKernelSize * btvKernelSize;
-        AutoBuffer<T> weight_(weightSize);
-        T* weight = weight_;
-        for (int m = 0, count = 0; m <= ksize; ++m)
-        {
-            for (int l = ksize; l + m >= 0; --l, ++count)
-            {
-                CV_DbgAssert(count < weightSize);
-                weight[count] = pow(static_cast<T>(alpha), std::abs(m) + std::abs(l));
-            }
-        }
-
         BtvRegularizationBody<T, VT> body;
 
         body.src = X;
         body.dst = dst;
         body.ksize = ksize;
-        body._weight = Mat_<T>(1, weightSize, weight);
+        body.weight = btvWeights.ptr<T>();
 
         parallel_for_(Range(ksize, X.rows - ksize), body);
     }
 
-    void calcBtvRegularization(const Mat& X, Mat& dst, int btvKernelSize, double alpha)
+    void calcBtvRegularization(const Mat& X, Mat& dst, int btvKernelSize, const Mat& btvWeights)
     {
-        typedef void (*func_t)(const Mat& X, Mat& dst, int btvKernelSize, double alpha);
+        typedef void (*func_t)(const Mat& X, Mat& dst, int btvKernelSize, const Mat& btvWeights);
         static const func_t funcs[2][2] =
         {
             {calcBtvRegularizationImpl<float, float>, calcBtvRegularizationImpl<float, Point3f>},
@@ -558,7 +580,7 @@ namespace
 
         const func_t func = funcs[X.depth() == CV_64F][X.channels() == 3];
 
-        func(X, dst, btvKernelSize, alpha);
+        func(X, dst, btvKernelSize, btvWeights);
     }
 }
 
@@ -575,6 +597,9 @@ void cv::superres::BilateralTotalVariation::process(const vector<Mat>& y, const 
         calcBlurWeights(static_cast<BlurModel>(blurModel), blurKernelSize, workDepth, blurWeights);
         curBlurModel = blurModel;
     }
+
+    if (btvWeights.cols != btvKernelSize * btvKernelSize || btvWeights.depth() != workDepth)
+        calcBtvWeights(btvKernelSize, alpha, btvWeights, workDepth);
 
     Size lowResSize = y.front().size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
@@ -602,7 +627,7 @@ void cv::superres::BilateralTotalVariation::process(const vector<Mat>& y, const 
         // regularization term
 
         if (lambda > 0)
-            calcBtvRegularization(X, regTerm, btvKernelSize, alpha);
+            calcBtvRegularization(X, regTerm, btvKernelSize, btvWeights);
 
         // creep ideal image, beta is parameter of the creeping speed.
 

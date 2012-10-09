@@ -126,6 +126,8 @@ namespace cv
             gpu::GpuMat d_dst;
             gpu::GpuMat yBuf;
 
+            Mat_<float> btvWeights;
+
             cusparseHandle_t handle;
             cusparseMatDescr_t descr;
         };
