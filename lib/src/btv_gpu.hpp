@@ -192,7 +192,7 @@ namespace cv
 
             int temporalAreaRadius;
 
-            std::vector<Mat> frames;
+            std::vector<gpu::GpuMat> frames;
             std::vector<Mat> results;
 
             std::vector<gpu::GpuMat> y;
@@ -203,9 +203,6 @@ namespace cv
             int outPos;
 
             Mat m1, m2;
-
-            gpu::GpuMat srcBuf;
-            gpu::GpuMat curImageBuf;
 
             std::vector<float> valsBuf;
             std::vector<int> rowPtrBuf;

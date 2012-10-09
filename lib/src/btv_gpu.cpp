@@ -693,20 +693,18 @@ void cv::superres::BTV_Video_GPU::processFrame(int idx)
 
     int count = 0;
 
-    Mat src = at(idx, frames);
-    srcBuf.upload(src);
+    GpuMat src = at(idx, frames);
 
     for (size_t k = 0; k < frames.size(); ++k)
     {
-        Mat curImage = frames[k];
-        curImageBuf.upload(curImage);
+        GpuMat curImage = frames[k];
 
-        bool ok = motionEstimator->estimate(curImageBuf, srcBuf, m1, m2);
+        bool ok = motionEstimator->estimate(curImage, src, m1, m2);
 
         if (ok)
         {
-            createContinuous(curImageBuf.size(), CV_32FC(src.channels()), y[count]);
-            curImageBuf.convertTo(y[count], CV_32F);
+            createContinuous(curImage.size(), CV_32FC(src.channels()), y[count]);
+            curImage.convertTo(y[count], CV_32F);
             calcDhf(src.size(), scale, blurKernelSize, m1, m2, static_cast<MotionModel>(motionModel), blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[count]);
             ++count;
         }
@@ -724,7 +722,7 @@ void cv::superres::BTV_Video_GPU::addNewFrame(const Mat& frame)
     ++procPos;
     ++outPos;
 
-    frame.copyTo(at(storePos, frames));
+    at(storePos, frames).upload(frame);
 }
 
 void cv::superres::BTV_Video_GPU::setMotionModel(int motionModel)
