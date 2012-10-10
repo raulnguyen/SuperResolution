@@ -28,7 +28,7 @@
 #ifndef __MOTION_ESTIMATION_HPP__
 #define __MOTION_ESTIMATION_HPP__
 
-#include "super_resolution_common.hpp"
+#include "super_resolution.hpp"
 #include "super_resolution_export.h"
 
 namespace cv

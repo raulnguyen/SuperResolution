@@ -29,8 +29,7 @@
 #define __BTV_HPP__
 
 #include <vector>
-#include "image_super_resolution.hpp"
-#include "video_super_resolution.hpp"
+#include "super_resolution.hpp"
 #include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
@@ -39,14 +38,23 @@ namespace cv
     namespace superres
     {
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation
+        class SUPER_RESOLUTION_NO_EXPORT BTV_Base
         {
-        protected:
-            BilateralTotalVariation();
+        public:
+            struct DHF_Val
+            {
+                Point coord;
+                float weight;
+                DHF_Val(Point coord, float weight) : coord(coord), weight(weight) {}
+            };
 
-            void setMotionModel(int motionModel);
+            BTV_Base();
 
-            void process(const std::vector<Mat>& y, const std::vector<Mat>& DHF, int count, OutputArray dst);
+            void process(const Mat& src, Mat& dst, const std::vector<Mat>& y, const std::vector<Mat>& DHF, int count);
+
+            static void calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights);
+            static void calcDhf(Size lowResSize, int scale, int blurKernelSize, const std::vector<float>& blurWeights,
+                                MotionModel motionModel, const Mat& m1, const Mat& m2, Mat& DHF);
 
             int scale;
             int iterations;
@@ -54,12 +62,6 @@ namespace cv
             double lambda;
             double alpha;
             int btvKernelSize;
-            int workDepth;
-            int motionModel;
-            int blurModel;
-            int blurKernelSize;
-
-            Ptr<MotionEstimator> motionEstimator;
 
         private:
             Mat X;
@@ -69,71 +71,49 @@ namespace cv
 
             Mat regTerm;
 
-            Mat blurWeights;
-            int curBlurModel;
-
-            Mat btvWeights;
+            std::vector<float> btvWeights;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT BTV_Image : public ImageSuperResolution, private BilateralTotalVariation
+        class SUPER_RESOLUTION_NO_EXPORT BTV : public SuperResolution, private BTV_Base
         {
         public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
-
             AlgorithmInfo* info() const;
 
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-        private:
-            void trainImpl(const std::vector<Mat>& images);
-            void setMotionModel(int motionModel);
-
-            std::vector<Mat> images;
-
-            std::vector<Mat> y;
-            std::vector<Mat> DHF;
-
-            Mat m1, m2;
-        };
-
-        class SUPER_RESOLUTION_NO_EXPORT BTV_Video : public VideoSuperResolution, private BilateralTotalVariation
-        {
-        public:
             static bool init();
-            static Ptr<VideoSuperResolution> create();
+            static Ptr<SuperResolution> create();
 
-            AlgorithmInfo* info() const;
-
-            BTV_Video();
+            BTV();
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
-            Mat processImpl(const Mat& frame);
+            Mat processImpl(Ptr<IFrameSource>& frameSource);
 
         private:
+            void setMotionModel(int motionModel);
             void addNewFrame(const Mat& frame);
             void processFrame(int idx);
-            void setMotionModel(int motionModel);
 
+            int motionModel;
+            int blurModel;
+            int blurKernelSize;
             int temporalAreaRadius;
+
+            Ptr<MotionEstimator> motionEstimator;
+            Mat m1, m2;
 
             std::vector<Mat> frames;
             std::vector<Mat> results;
 
-            std::vector<Mat> y;
-            std::vector<Mat> DHF;
-
-            Mat m1, m2;
-
             int storePos;
             int procPos;
             int outPos;
+
+            std::vector<float> blurWeights;
+            int curBlurModel;
+
+            Mat src_f;
+            std::vector<Mat> y;
+            std::vector<Mat> DHF;
         };
     }
 }

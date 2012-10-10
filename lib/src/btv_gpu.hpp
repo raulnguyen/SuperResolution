@@ -31,8 +31,7 @@
 #include <vector>
 #include <cusparse_v2.h>
 #include <opencv2/gpu/gpu.hpp>
-#include "image_super_resolution.hpp"
-#include "video_super_resolution.hpp"
+#include "super_resolution.hpp"
 #include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
@@ -40,6 +39,8 @@ namespace cv
 {
     namespace superres
     {
+        using cv::gpu::GpuMat;
+
         class SUPER_RESOLUTION_NO_EXPORT GpuSparseMat_CSR
         {
         public:
@@ -81,7 +82,7 @@ namespace cv
             int cols_;
             int nonZeroCount_;
             int type_;
-            gpu::GpuMat data_;
+            GpuMat data_;
         };
 
         template <typename T>
@@ -95,15 +96,19 @@ namespace cv
         }
 
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        class SUPER_RESOLUTION_NO_EXPORT BilateralTotalVariation_GPU
+        class SUPER_RESOLUTION_NO_EXPORT BTV_GPU_Base
         {
         protected:
-            BilateralTotalVariation_GPU();
-            ~BilateralTotalVariation_GPU();
+            BTV_GPU_Base();
+            ~BTV_GPU_Base();
 
-            void setMotionModel(int motionModel);
+            void process(const GpuMat& src, GpuMat& dst, const std::vector<GpuMat>& y, const std::vector<GpuSparseMat_CSR>& DHF, int count);
 
-            void process(const std::vector<gpu::GpuMat>& y, const std::vector<GpuSparseMat_CSR>& DHF, int count, OutputArray dst);
+            static void calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights);
+            static void calcDhf(Size lowResSize, int scale, int blurKernelSize, const std::vector<float>& blurWeights,
+                                MotionModel motionModel, const Mat& m1, const Mat& m2,
+                                std::vector<float>& vals, std::vector<int>& rowPtr, std::vector<int>& colInd,
+                                GpuSparseMat_CSR& DHF);
 
             int scale;
             int iterations;
@@ -111,105 +116,65 @@ namespace cv
             double lambda;
             double alpha;
             int btvKernelSize;
-            int motionModel;
-            int blurModel;
-            int blurKernelSize;
-
-            Ptr<MotionEstimator> motionEstimator;
 
         private:
-            gpu::GpuMat X;
-            gpu::GpuMat Xout;
-            gpu::GpuMat diffTerm;
-            gpu::GpuMat regTerm;
-            gpu::GpuMat buf;
-            gpu::GpuMat d_dst;
-            gpu::GpuMat yBuf;
+            GpuMat X;
+            GpuMat Xout;
+            GpuMat diffTerm;
+            GpuMat regTerm;
+            GpuMat buf;
 
-            Mat_<float> btvWeights;
+            std::vector<float> btvWeights;
 
             cusparseHandle_t handle;
             cusparseMatDescr_t descr;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT BTV_Image_GPU : public ImageSuperResolution, private BilateralTotalVariation_GPU
+        class SUPER_RESOLUTION_NO_EXPORT BTV_GPU : public SuperResolution, private BTV_GPU_Base
         {
         public:
-            static bool init();
-            static Ptr<ImageSuperResolution> create();
-
-            BTV_Image_GPU();
-
             AlgorithmInfo* info() const;
 
-            void train(InputArrayOfArrays images);
-
-            bool empty() const;
-            void clear();
-
-            void process(InputArray src, OutputArray dst);
-
-        private:
-            void trainImpl(const std::vector<Mat>& images);
-            void setMotionModel(int motionModel);
-
-            std::vector<Mat> images;
-
-            std::vector<gpu::GpuMat> y;
-            std::vector<GpuSparseMat_CSR> DHF;
-
-            Mat m1, m2;
-
-            gpu::GpuMat srcBuf;
-            gpu::GpuMat curImageBuf;
-
-            std::vector<float> valsBuf;
-            std::vector<int> rowPtrBuf;
-            std::vector<int> colIndBuf;
-
-            Mat_<float> blurWeights;
-            int curBlurModel;
-        };
-
-        class SUPER_RESOLUTION_NO_EXPORT BTV_Video_GPU : public VideoSuperResolution, private BilateralTotalVariation_GPU
-        {
-        public:
             static bool init();
-            static Ptr<VideoSuperResolution> create();
+            static Ptr<SuperResolution> create();
 
-            AlgorithmInfo* info() const;
-
-            BTV_Video_GPU();
+            BTV_GPU();
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
-            Mat processImpl(const Mat& frame);
+            Mat processImpl(Ptr<IFrameSource>& frameSource);
 
         private:
+            void setMotionModel(int motionModel);
             void addNewFrame(const Mat& frame);
             void processFrame(int idx);
-            void setMotionModel(int motionModel);
 
+            int motionModel;
+            int blurModel;
+            int blurKernelSize;
             int temporalAreaRadius;
 
-            std::vector<gpu::GpuMat> frames;
-            std::vector<Mat> results;
+            Ptr<MotionEstimator> motionEstimator;
+            Mat m1, m2;
 
-            std::vector<gpu::GpuMat> y;
+            std::vector<GpuMat> frames;
+            std::vector<GpuMat> results;
+            Mat h_dst;
+
+            GpuMat src_f;
+            std::vector<GpuMat> y;
             std::vector<GpuSparseMat_CSR> DHF;
 
             int storePos;
             int procPos;
             int outPos;
 
-            Mat m1, m2;
+            std::vector<float> blurWeights;
+            int curBlurModel;
 
             std::vector<float> valsBuf;
             std::vector<int> rowPtrBuf;
             std::vector<int> colIndBuf;
-
-            Mat_<float> blurWeights;
-            int curBlurModel;
         };
     }
 }

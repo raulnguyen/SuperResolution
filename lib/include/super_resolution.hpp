@@ -28,14 +28,64 @@
 #ifndef __SUPER_RESOLUTION_HPP__
 #define __SUPER_RESOLUTION_HPP__
 
-#include "image_super_resolution.hpp"
-#include "video_super_resolution.hpp"
+#include <opencv2/core/core.hpp>
+#include <opencv2/videostab/motion_core.hpp>
+#include <opencv2/videostab/frame_source.hpp>
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
+        using videostab::IFrameSource;
+        using videostab::NullFrameSource;
+        using videostab::VideoFileSource;
+
+        using cv::videostab::MotionModel;
+        using cv::videostab::MM_TRANSLATION;
+        using cv::videostab::MM_TRANSLATION_AND_SCALE;
+        using cv::videostab::MM_ROTATION;
+        using cv::videostab::MM_RIGID;
+        using cv::videostab::MM_SIMILARITY;
+        using cv::videostab::MM_AFFINE;
+        using cv::videostab::MM_HOMOGRAPHY;
+        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
+
+        enum BlurModel
+        {
+            BLUR_BOX,
+            BLUR_GAUSS
+        };
+
+        enum SRMethod
+        {
+            SR_BILATERAL_TOTAL_VARIATION,
+            SR_METHOD_MAX
+        };
+
+        class SUPER_RESOLUTION_EXPORT SuperResolution : public Algorithm, public IFrameSource
+        {
+        public:
+            static Ptr<SuperResolution> create(SRMethod method, bool useGpu = false);
+
+            virtual ~SuperResolution();
+
+            void setFrameSource(const Ptr<IFrameSource>& frameSource);
+
+            void reset();
+            Mat nextFrame();
+
+        protected:
+            SuperResolution();
+
+            virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
+            virtual Mat processImpl(Ptr<IFrameSource>& frameSource) = 0;
+
+        private:
+            Ptr<IFrameSource> frameSource;
+            bool firstCall;
+        };
+
         SUPER_RESOLUTION_EXPORT bool initModule_superres();
     }
 }

@@ -29,7 +29,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/contrib/contrib.hpp>
-#include "video_super_resolution.hpp"
+#include "super_resolution.hpp"
 
 using namespace std;
 using namespace cv;
@@ -94,7 +94,7 @@ int main(int argc, const char* argv[])
     const int scale = cmd.get<int>("scale");
     const bool useGpu = cmd.has("gpu");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION, useGpu);
+    Ptr<SuperResolution> superRes = SuperResolution::create(SR_BILATERAL_TOTAL_VARIATION, useGpu);
     superRes->set("scale", scale);
 
     Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); superResSource->nextFrame();
@@ -104,19 +104,18 @@ int main(int argc, const char* argv[])
 
     for (;;)
     {
+        Mat frame = bicubicSource->nextFrame();
+        if (frame.empty())
+            break;
+
+        Mat bicubic;
+        MEASURE_TIME(resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC), "Bi-Cubic");
+
         Mat result;
         MEASURE_TIME(result = superRes->nextFrame(), "Process");
 
         if (result.empty())
             break;
-
-        Mat frame = bicubicSource->nextFrame();
-
-        if (frame.empty())
-            break;
-
-        Mat bicubic;
-        resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 
         imshow("Input", frame);
         imshow("Super Resolution", result);

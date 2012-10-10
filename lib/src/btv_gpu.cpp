@@ -28,7 +28,6 @@
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/gpu/stream_accessor.hpp>
 #include <opencv2/videostab/ring_buffer.hpp>
-#include "cpu_gpu_transform.hpp"
 #ifdef WITH_TESTS
     #include <cuda_runtime.h>
     #include <opencv2/ts/ts_gtest.h>
@@ -87,9 +86,9 @@ void cv::superres::GpuSparseMat_CSR::setDataImpl(const void* vals, const int* ro
 }
 
 ///////////////////////////////////////////////////////////////
-// BilateralTotalVariation_GPU
+// BTV_GPU_Base
 
-cv::superres::BilateralTotalVariation_GPU::BilateralTotalVariation_GPU()
+cv::superres::BTV_GPU_Base::BTV_GPU_Base()
 {
     scale = 4;
     iterations = 180;
@@ -97,31 +96,41 @@ cv::superres::BilateralTotalVariation_GPU::BilateralTotalVariation_GPU()
     lambda = 0.03;
     alpha = 0.7;
     btvKernelSize = 7;
-    blurModel = BLUR_GAUSS;
-    blurKernelSize = 5;
-
-    setMotionModel(MM_AFFINE);
 
     cusparseCall( cusparseCreate(&handle) );
     cusparseCall( cusparseCreateMatDescr(&descr) );
 }
 
-cv::superres::BilateralTotalVariation_GPU::~BilateralTotalVariation_GPU()
+cv::superres::BTV_GPU_Base::~BTV_GPU_Base()
 {
     cusparseDestroy(handle);
     cusparseDestroyMatDescr(descr);
 }
 
-void cv::superres::BilateralTotalVariation_GPU::setMotionModel(int motionModel)
-{
-    CV_DbgAssert(motionModel >= MM_TRANSLATION && motionModel <= MM_UNKNOWN);
-
-    motionEstimator = MotionEstimator::create(static_cast<MotionModel>(motionModel), true);
-    this->motionModel = motionModel;
-}
-
 namespace
 {
+    void calcBtvWeights(int btvKernelSize, double alpha, vector<float>& btvWeights)
+    {
+        CV_Assert(btvKernelSize <= 16);
+        CV_DbgAssert(btvKernelSize > 0);
+        CV_DbgAssert(alpha > 0);
+
+        const size_t size = btvKernelSize * btvKernelSize;
+
+        if (btvWeights.size() != size)
+        {
+            btvWeights.resize(size);
+
+            const int ksize = (btvKernelSize - 1) / 2;
+
+            for (int m = 0, ind = 0; m <= ksize; ++m)
+            {
+                for (int l = ksize; l + m >= 0; --l, ++ind)
+                    btvWeights[ind] = static_cast<float>(pow(alpha, std::abs(m) + std::abs(l)));
+            }
+        }
+    }
+
     void mulSparseMat(cusparseHandle_t handle, cusparseMatDescr_t descr, const GpuSparseMat_CSR& smat, const GpuMat& src, GpuMat& dst, Size dstSize, bool isTranspose = false)
     {
         CV_DbgAssert(smat.type() == CV_32FC1);
@@ -153,46 +162,26 @@ namespace
 
     void diffSign(const GpuMat& src1, const GpuMat& src2, GpuMat& dst, Stream& stream = Stream::Null())
     {
-        CV_DbgAssert(src1.channels() == src2.channels());
         CV_DbgAssert(src1.depth() == CV_32F);
+        CV_DbgAssert(src1.type() == src2.type());
+        CV_DbgAssert(src1.size() == src2.size());
 
         dst.create(src1.size(), src1.type());
 
-        GpuMat dst1cn = dst.reshape(1);
-        btv_device::diffSign(src1.reshape(1), src2.reshape(1), dst1cn, StreamAccessor::getStream(stream));
+        btv_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1), StreamAccessor::getStream(stream));
     }
 
     void calcBtvDiffTerm(const GpuMat& y, const GpuSparseMat_CSR& DHF, const GpuMat& X, GpuMat& diffTerm, GpuMat& buf,
                          cusparseHandle_t handle, cusparseMatDescr_t descr)
     {
-        // degrade current estimated image
         mulSparseMat(handle, descr, DHF, X, buf, y.size());
 
-        // compere input and degraded image
         diffSign(buf, y, buf);
 
-        // blur the subtructed vector with transposed matrix
         mulSparseMat(handle, descr, DHF, buf, diffTerm, X.size(), true);
     }
 
-    void calcBtvWeights(int btvKernelSize, float alpha, Mat_<float>& btvWeights)
-    {
-        CV_DbgAssert(btvKernelSize > 0);
-        CV_DbgAssert(alpha > 0);
-
-        btvWeights.create(1, btvKernelSize * btvKernelSize);
-        float* weights = btvWeights.ptr<float>();
-
-        const int ksize = (btvKernelSize - 1) / 2;
-
-        for (int m = 0, count = 0; m <= ksize; ++m)
-        {
-            for (int l = ksize; l + m >= 0; --l, ++count)
-                weights[count] = pow(alpha, std::abs(m) + std::abs(l));
-        }
-    }
-
-    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize, const Mat_<float>& btvWeights)
+    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize, const vector<float>& btvWeights)
     {
         typedef void (*func_t)(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
         static const func_t funcs[] =
@@ -207,63 +196,53 @@ namespace
         CV_DbgAssert(X.depth() == CV_32F);
         CV_DbgAssert(X.channels() == 1 || X.channels() == 3 || X.channels() == 4);
         CV_DbgAssert(btvKernelSize > 0 && btvKernelSize <= 16);
-        CV_DbgAssert(btvWeights.rows == 1);
-        CV_DbgAssert(btvWeights.cols == btvKernelSize * btvKernelSize);
+        CV_DbgAssert(btvWeights.size() == btvKernelSize * btvKernelSize);
 
         dst.create(X.size(), X.type());
         dst.setTo(Scalar::all(0));
 
         const int ksize = (btvKernelSize - 1) / 2;
 
-        funcs[X.channels()](X, dst, ksize, btvWeights[0], btvWeights.cols, 0);
+        funcs[X.channels()](X, dst, ksize, &btvWeights[0], static_cast<int>(btvWeights.size()), 0);
     }
 }
 
-void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y, const vector<GpuSparseMat_CSR>& DHF, int count, OutputArray dst)
+void cv::superres::BTV_GPU_Base::process(const GpuMat& src, GpuMat& dst, const std::vector<GpuMat>& y, const std::vector<GpuSparseMat_CSR>& DHF, int count)
 {
+    CV_DbgAssert(src.type() == CV_32FC1);
     CV_DbgAssert(count > 0);
     CV_DbgAssert(y.size() >= count);
     CV_DbgAssert(DHF.size() >= count);
 
-    Size lowResSize = y.front().size();
-    const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
+    calcBtvWeights(btvKernelSize, alpha, btvWeights);
 
-    if (btvWeights.cols != btvKernelSize * btvKernelSize)
-        calcBtvWeights(btvKernelSize, alpha, btvWeights);
+    Size lowResSize = src.size();
+    const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
 #ifdef _DEBUG
     for (size_t i = 0; i < count; ++i)
     {
         CV_DbgAssert(y[i].isContinuous());
         CV_DbgAssert(y[i].size() == lowResSize);
-        CV_DbgAssert(y[i].type() == CV_32FC1);
+        CV_DbgAssert(y[i].type() == src.type());
         CV_DbgAssert(DHF[i].rows() == lowResSize.area());
         CV_DbgAssert(DHF[i].cols() == highResSize.area());
         CV_DbgAssert(DHF[i].type() == CV_32FC1);
     }
 #endif
 
-    // create initial image by simple bi-cubic interpolation
+    createContinuous(highResSize, src.type(), X);
+    createContinuous(highResSize, src.type(), Xout);
 
-    createContinuous(highResSize, y.front().type(), X);
-    createContinuous(highResSize, y.front().type(), Xout);
-
-    y.front().copyTo(yBuf);
-    resize(yBuf, X, highResSize, 0, 0, INTER_CUBIC);
-
-    // steepest descent method for L1 norm minimization
+    resize(src, X, highResSize, 0, 0, INTER_CUBIC);
 
     for (int i = 0; i < iterations; ++i)
     {
-        // diff terms
-
         for (int k = 0; k < count; ++k)
         {
             calcBtvDiffTerm(y[k], DHF[k], X, diffTerm, buf, handle, descr);
             addWeighted(k == 0 ? X : Xout, 1.0, diffTerm, -beta, 0.0, Xout);
         }
-
-        // regularization term
 
         if (lambda > 0)
         {
@@ -274,45 +253,44 @@ void cv::superres::BilateralTotalVariation_GPU::process(const vector<GpuMat>& y,
         Xout.swap(X);
     }
 
-    X.convertTo(d_dst, CV_8U);
-    setGpuMat(d_dst, dst);
+    X.convertTo(dst, CV_8U);
 }
 
-///////////////////////////////////////////////////////////////
-// calcDhf
+void cv::superres::BTV_GPU_Base::calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights)
+{
+    CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
+    CV_DbgAssert(blurKernelSize > 0);
+
+    const size_t size = blurKernelSize * blurKernelSize;
+
+    switch (blurModel)
+    {
+    case BLUR_BOX:
+        blurWeights.clear();
+        blurWeights.resize(size, 1.0f / size);
+        break;
+
+    case BLUR_GAUSS:
+        Mat_<float> ker = getGaussianKernel(blurKernelSize, 0, CV_32F);
+
+        blurWeights.resize(size);
+
+        for (int i = 0, ind = 0; i < blurKernelSize; ++i)
+            for (int j = 0; j < blurKernelSize; ++j, ++ind)
+                blurWeights[ind] = ker(i, 0) * ker(j, 0);
+    };
+}
 
 namespace
 {
-    void calcBlurWeights(BlurModel blurModel, int blurKernelSize, Mat_<float>& weights)
-    {
-        switch (blurModel)
-        {
-        case BLUR_BOX:
-            weights.create(1, blurKernelSize * blurKernelSize);
-            weights.setTo(Scalar::all(1.0 / (blurKernelSize * blurKernelSize)));
-            break;
-
-        case BLUR_GAUSS:
-            Mat_<float> ker = getGaussianKernel(blurKernelSize, 0, CV_32F);
-
-            weights.create(1, blurKernelSize * blurKernelSize);
-            float* weightsPtr = weights[0];
-
-            for (int i = 0, ind = 0; i < blurKernelSize; ++i)
-                for (int j = 0; j < blurKernelSize; ++j, ++ind)
-                    weightsPtr[ind] = ker(i, 0) * ker(j, 0);
-        };
-    }
-
-    template <typename T>
     class AffineMotion
     {
     public:
         explicit AffineMotion(const Mat& M) : M(M) {}
 
-        Point2d calcCoord(Point base) const
+        Point2f calcCoord(Point base) const
         {
-            Point2d res;
+            Point2f res;
             res.x = M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2);
             res.y = M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2);
 
@@ -320,20 +298,19 @@ namespace
         }
 
     private:
-        Mat_<T> M;
+        Mat_<float> M;
     };
 
-    template <typename T>
     class PerspectiveMotion
     {
     public:
         explicit PerspectiveMotion(const Mat& M) : M(M) {}
 
-        Point2d calcCoord(Point base) const
+        Point2f calcCoord(Point base) const
         {
-            double w = 1.0 / (M(2, 0) * base.x + M(2, 1) * base.y + M(2, 2));
+            const float w = 1.0f / (M(2, 0) * base.x + M(2, 1) * base.y + M(2, 2));
 
-            Point2d res;
+            Point2f res;
             res.x = (M(0, 0) * base.x + M(0, 1) * base.y + M(0, 2)) * w;
             res.y = (M(1, 0) * base.x + M(1, 1) * base.y + M(1, 2)) * w;
 
@@ -341,18 +318,17 @@ namespace
         }
 
     private:
-        Mat_<T> M;
+        Mat_<float> M;
     };
 
-    template <typename T>
     class GeneralMotion
     {
     public:
         GeneralMotion(const Mat& dx, const Mat& dy) : dx(dx), dy(dy) {}
 
-        Point2d calcCoord(Point base) const
+        Point2f calcCoord(Point base) const
         {
-            Point2d res;
+            Point2f res;
             res.x = base.x + dx(base);
             res.y = base.y + dy(base);
 
@@ -360,16 +336,19 @@ namespace
         }
 
     private:
-        Mat_<T> dx;
-        Mat_<T> dy;
+        Mat_<float> dx;
+        Mat_<float> dy;
     };
 
     template <class Motion>
-    void calcDhfImpl(Size lowResSize, Size highResSize, int scale, int blurKernelSize, const Motion& motion, const Mat_<float>& blurWeights,
+    void calcDhfImpl(Size lowResSize, int scale, int blurKernelSize, const vector<float>& blurWeights, const Motion& motion,
                      vector<float>& vals, vector<int>& rowPtr, vector<int>& colInd, GpuSparseMat_CSR& DHF)
     {
+        CV_DbgAssert(scale > 1);
+        CV_DbgAssert(blurKernelSize > 0);
+        CV_DbgAssert(blurWeights.size() == blurKernelSize * blurKernelSize);
 
-        const float* weightPtr = blurWeights[0];
+        Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
         vals.clear();
         rowPtr.resize(lowResSize.area() + 1, 0);
@@ -379,7 +358,7 @@ namespace
         {
             for (int x = 0; x < lowResSize.width; ++x, ++lowResInd)
             {
-                Point2d lowOrigCoord = motion.calcCoord(Point(x, y));
+                Point2f lowOrigCoord = motion.calcCoord(Point(x, y));
 
                 int count = 0;
 
@@ -387,10 +366,10 @@ namespace
                 {
                     for (int j = 0; j < blurKernelSize; ++j, ++blurKerInd)
                     {
-                        const float w = weightPtr[blurKerInd];
+                        const float w = blurWeights[blurKerInd];
 
-                        int X = cvFloor(lowOrigCoord.x * scale + j - blurKernelSize / 2);
-                        int Y = cvFloor(lowOrigCoord.y * scale + i - blurKernelSize / 2);
+                        const int X = cvFloor(lowOrigCoord.x * scale + j - blurKernelSize / 2);
+                        const int Y = cvFloor(lowOrigCoord.y * scale + i - blurKernelSize / 2);
 
                         if (X >= 0 && X < highResSize.width && Y >= 0 && Y < highResSize.height)
                         {
@@ -408,47 +387,45 @@ namespace
         DHF.create(lowResSize.area(), highResSize.area(), vals.size(), CV_32FC1);
         DHF.setData(vals, rowPtr, colInd);
     }
+}
 
-    void calcDhf(Size lowResSize, int scale, int blurKernelSize, const Mat& m1, const Mat& m2, MotionModel motionModel, const Mat_<float>& blurWeights,
-                 vector<float>& vals, vector<int>& rowPtr, vector<int>& colInd, GpuSparseMat_CSR& DHF)
+void cv::superres::BTV_GPU_Base::calcDhf(Size lowResSize, int scale, int blurKernelSize, const vector<float>& blurWeights,
+                                         MotionModel motionModel, const Mat& m1, const Mat& m2,
+                                         vector<float>& vals, vector<int>& rowPtr, vector<int>& colInd,
+                                         GpuSparseMat_CSR& DHF)
+{
+    if (motionModel == MM_UNKNOWN)
     {
-        CV_DbgAssert(scale > 1);
+        CV_DbgAssert(m1.type() == CV_32FC1);
+        CV_DbgAssert(m1.size() == lowResSize);
+        CV_DbgAssert(m1.size() == m2.size());
+        CV_DbgAssert(m1.type() == m2.type());
 
-        Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
+        GeneralMotion motion(m1, m2);
+        calcDhfImpl(lowResSize, scale, blurKernelSize, blurWeights, motion, vals, rowPtr, colInd, DHF);
+    }
+    else if (motionModel < MM_HOMOGRAPHY)
+    {
+        CV_DbgAssert(m1.type() == CV_32FC1);
+        CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
+        CV_DbgAssert(m1.cols == 3);
 
-        if (motionModel == MM_UNKNOWN)
-        {
-            CV_DbgAssert(m1.type() == CV_32FC1);
-            CV_DbgAssert(m1.size() == lowResSize);
-            CV_DbgAssert(m1.size() == m2.size());
-            CV_DbgAssert(m1.type() == m2.type());
+        AffineMotion motion(m1);
+        calcDhfImpl(lowResSize, scale, blurKernelSize, blurWeights, motion, vals, rowPtr, colInd, DHF);
+    }
+    else
+    {
+        CV_DbgAssert(m1.type() == CV_32FC1);
+        CV_DbgAssert(m1.rows == 3);
+        CV_DbgAssert(m1.cols == 3);
 
-            GeneralMotion<float> motion(m1, m2);
-            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
-        }
-        else if (motionModel < MM_HOMOGRAPHY)
-        {
-            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
-
-            AffineMotion<float> motion(m1);
-            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
-        }
-        else
-        {
-            CV_DbgAssert(m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
-
-            PerspectiveMotion<float> motion(m1);
-            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
-        }
+        PerspectiveMotion motion(m1);
+        calcDhfImpl(lowResSize, scale, blurKernelSize, blurWeights, motion, vals, rowPtr, colInd, DHF);
     }
 }
 
 ///////////////////////////////////////////////////////////////
-// BTV_Image_GPU
+// BTV_GPU
 
 namespace cv
 {
@@ -456,151 +433,7 @@ namespace cv
     {
         typedef void (Algorithm::*IntSetter)(int);
 
-        CV_INIT_ALGORITHM(BTV_Image_GPU, "ImageSuperResolution.BilateralTotalVariation_GPU",
-                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
-                                               "Scale factor.");
-                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
-                                               "Iteration count.");
-                          obj.info()->addParam(obj, "beta", obj.beta, false, 0, 0,
-                                               "Asymptotic value of steepest descent method.");
-                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
-                                               "Weight parameter to balance data term and smoothness term.");
-                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
-                                               "Parameter of spacial distribution in btv.");
-                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                               "Kernel size of btv filter.");
-                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Image_GPU::setMotionModel,
-                                               "Motion model between frames.");
-                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
-                                               "Blur model.");
-                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
-                                               "Blur kernel size (if -1, than it will be equal scale factor)."));
-    }
-}
-
-bool cv::superres::BTV_Image_GPU::init()
-{
-    return !BTV_Image_GPU_info_auto.name().empty();
-}
-
-Ptr<ImageSuperResolution> cv::superres::BTV_Image_GPU::create()
-{
-    return Ptr<ImageSuperResolution>(new BTV_Image_GPU);
-}
-
-cv::superres::BTV_Image_GPU::BTV_Image_GPU()
-{
-    curBlurModel = -1;
-}
-
-void cv::superres::BTV_Image_GPU::train(InputArrayOfArrays _images)
-{
-    vector<Mat> images;
-
-    if (_images.kind() == _InputArray::STD_VECTOR_MAT)
-        _images.getMatVector(images);
-    else
-    {
-        Mat image = _images.getMat();
-        images.push_back(image);
-    }
-
-    trainImpl(images);
-}
-
-void cv::superres::BTV_Image_GPU::trainImpl(const vector<Mat>& images)
-{
-#ifdef _DEBUG
-    CV_DbgAssert(!images.empty());
-    CV_DbgAssert(images[0].type() == CV_8UC1 || images[0].type() == CV_8UC3);
-
-    for (size_t i = 1; i < images.size(); ++i)
-    {
-        CV_DbgAssert(images[i].size() == images[0].size());
-        CV_DbgAssert(images[i].type() == images[0].type());
-    }
-
-    if (!this->images.empty())
-    {
-        CV_DbgAssert(images[0].size() == this->images[0].size());
-    }
-#endif
-
-    this->images.insert(this->images.end(), images.begin(), images.end());
-}
-
-bool cv::superres::BTV_Image_GPU::empty() const
-{
-    return images.empty();
-}
-
-void cv::superres::BTV_Image_GPU::clear()
-{
-    images.clear();
-}
-
-void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
-{
-    CV_DbgAssert(scale > 1);
-    CV_DbgAssert(blurKernelSize > 0);
-    CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
-
-    GpuMat src = getGpuMat(_src, srcBuf);
-
-    CV_DbgAssert(empty() || src.size() == images[0].size());
-    CV_DbgAssert(empty() || src.type() == images[0].type());
-
-    if (blurKernelSize < 0)
-        blurKernelSize = scale;
-
-    if (blurWeights.cols != blurKernelSize * blurKernelSize || curBlurModel != blurModel)
-    {
-        calcBlurWeights(static_cast<BlurModel>(blurModel), blurKernelSize, blurWeights);
-        curBlurModel = blurModel;
-    }
-
-    // calc DHF for all low-res images
-
-    y.resize(images.size() + 1);
-    DHF.resize(images.size() + 1);
-
-    int count = 1;
-    createContinuous(src.size(), CV_32FC(src.channels()), y[0]);
-    src.convertTo(y[0], CV_32F);
-    calcDhf(src.size(), scale, blurKernelSize, Mat_<float>::eye(2, 3), Mat(), MM_AFFINE, blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[0]);
-
-    for (size_t i = 0; i < images.size(); ++i)
-    {
-        const Mat& curImage = images[i];
-        curImageBuf.upload(curImage);
-
-        bool ok = motionEstimator->estimate(curImageBuf, src, m1, m2);
-
-        if (ok)
-        {
-            createContinuous(curImageBuf.size(), CV_32FC(src.channels()), y[count]);
-            curImageBuf.convertTo(y[count], CV_32F);
-            calcDhf(src.size(), scale, blurKernelSize, m1, m2, static_cast<MotionModel>(motionModel), blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[count]);
-            ++count;
-        }
-    }
-
-    BilateralTotalVariation_GPU::process(y, DHF, count, dst);
-}
-
-void cv::superres::BTV_Image_GPU::setMotionModel(int motionModel)
-{
-    BilateralTotalVariation_GPU::setMotionModel(motionModel);
-}
-
-///////////////////////////////////////////////////////////////
-// BTV_Video_GPU
-
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(BTV_Video_GPU, "VideoSuperResolution.BilateralTotalVariation_GPU",
+        CV_INIT_ALGORITHM(BTV_GPU, "SuperResolution.BTV_GPU",
                           obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
                                                "Radius of the temporal search area.");
                           obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
@@ -615,7 +448,7 @@ namespace cv
                                                "Parameter of spacial distribution in btv.");
                           obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
                                                "Kernel size of btv filter.");
-                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_Video_GPU::setMotionModel,
+                          obj.info()->addParam(obj, "motionModel", obj.motionModel, false, 0, (IntSetter) &BTV_GPU::setMotionModel,
                                               "Motion model between frames.");
                           obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
                                                "Blur model.");
@@ -624,65 +457,100 @@ namespace cv
     }
 }
 
-bool cv::superres::BTV_Video_GPU::init()
+bool cv::superres::BTV_GPU::init()
 {
-    return !BTV_Video_GPU_info_auto.name().empty();
+    return !BTV_GPU_info_auto.name().empty();
 }
 
-Ptr<VideoSuperResolution> cv::superres::BTV_Video_GPU::create()
+Ptr<SuperResolution> cv::superres::BTV_GPU::create()
 {
-    return Ptr<VideoSuperResolution>(new BTV_Video_GPU);
+    Ptr<SuperResolution> alg(new BTV_GPU);
+    return alg;
 }
 
-cv::superres::BTV_Video_GPU::BTV_Video_GPU()
+cv::superres::BTV_GPU::BTV_GPU()
 {
+    setMotionModel(MM_AFFINE);
+    blurModel = BLUR_GAUSS;
+    blurKernelSize = 5;
     temporalAreaRadius = 4;
+
+    curBlurModel = -1;
 }
 
-void cv::superres::BTV_Video_GPU::initImpl(Ptr<IFrameSource>& frameSource)
+void cv::superres::BTV_GPU::setMotionModel(int motionModel)
+{
+    CV_DbgAssert(motionModel >= MM_TRANSLATION && motionModel <= MM_UNKNOWN);
+
+    motionEstimator = MotionEstimator::create(static_cast<MotionModel>(motionModel), true);
+    this->motionModel = motionModel;
+}
+
+void cv::superres::BTV_GPU::initImpl(Ptr<IFrameSource>& frameSource)
 {
     const int cacheSize = 2 * temporalAreaRadius + 1;
 
     frames.resize(cacheSize);
     results.resize(cacheSize);
 
-    y.reserve(cacheSize);
-    DHF.reserve(cacheSize);
-
     storePos = -1;
-    procPos = storePos - temporalAreaRadius;
-    outPos = procPos - temporalAreaRadius - 1;
 
     for (int t = -temporalAreaRadius; t <= temporalAreaRadius; ++t)
     {
         Mat frame = frameSource->nextFrame();
-
         CV_Assert(!frame.empty());
-
         addNewFrame(frame);
     }
 
-    for (int i = 0; i <= procPos; ++i)
+    for (int i = 0; i <= temporalAreaRadius; ++i)
         processFrame(i);
+
+    procPos = temporalAreaRadius;
+    outPos = -1;
 }
 
-Mat cv::superres::BTV_Video_GPU::processImpl(const Mat& frame)
+Mat cv::superres::BTV_GPU::processImpl(Ptr<IFrameSource>& frameSource)
 {
+    Mat frame = frameSource->nextFrame();
     addNewFrame(frame);
-    processFrame(procPos);
-    return at(outPos, results);
+
+    if (procPos < storePos)
+    {
+        ++procPos;
+        processFrame(procPos);
+    }
+
+    if (outPos < storePos)
+    {
+        ++outPos;
+        at(outPos, results).download(h_dst);
+        return h_dst;
+    }
+
+    return Mat();
 }
 
-void cv::superres::BTV_Video_GPU::processFrame(int idx)
+void cv::superres::BTV_GPU::addNewFrame(const Mat& frame)
+{
+    if (frame.empty())
+        return;
+
+    CV_DbgAssert(frame.type() == CV_8UC1);
+    CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
+
+    ++storePos;
+    at(storePos, frames).upload(frame);
+}
+
+void cv::superres::BTV_GPU::processFrame(int idx)
 {
     CV_DbgAssert(scale > 1);
-    CV_DbgAssert(blurKernelSize > 0);
     CV_DbgAssert(blurModel == BLUR_BOX || blurModel == BLUR_GAUSS);
 
     if (blurKernelSize < 0)
         blurKernelSize = scale;
 
-    if (blurWeights.cols != blurKernelSize * blurKernelSize || curBlurModel != blurModel)
+    if (blurWeights.size() != blurKernelSize * blurKernelSize || curBlurModel != blurModel)
     {
         calcBlurWeights(static_cast<BlurModel>(blurModel), blurKernelSize, blurWeights);
         curBlurModel = blurModel;
@@ -694,6 +562,7 @@ void cv::superres::BTV_Video_GPU::processFrame(int idx)
     int count = 0;
 
     GpuMat src = at(idx, frames);
+    src.convertTo(src_f, CV_32F);
 
     for (size_t k = 0; k < frames.size(); ++k)
     {
@@ -705,29 +574,13 @@ void cv::superres::BTV_Video_GPU::processFrame(int idx)
         {
             createContinuous(curImage.size(), CV_32FC(src.channels()), y[count]);
             curImage.convertTo(y[count], CV_32F);
-            calcDhf(src.size(), scale, blurKernelSize, m1, m2, static_cast<MotionModel>(motionModel), blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[count]);
+            calcDhf(src.size(), scale, blurKernelSize, blurWeights, static_cast<MotionModel>(motionModel), m1, m2,
+                    valsBuf, rowPtrBuf, colIndBuf, DHF[count]);
             ++count;
         }
     }
 
-    BilateralTotalVariation_GPU::process(y, DHF, count, at(idx, results));
-}
-
-void cv::superres::BTV_Video_GPU::addNewFrame(const Mat& frame)
-{
-    CV_DbgAssert(frame.type() == CV_8UC1);
-    CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
-
-    ++storePos;
-    ++procPos;
-    ++outPos;
-
-    at(storePos, frames).upload(frame);
-}
-
-void cv::superres::BTV_Video_GPU::setMotionModel(int motionModel)
-{
-    BilateralTotalVariation_GPU::setMotionModel(motionModel);
+    process(src_f, at(idx, results), y, DHF, count);
 }
 
 ///////////////////////////////////////////////////////////////
