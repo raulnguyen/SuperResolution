@@ -24,6 +24,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -36,13 +37,13 @@ using namespace cv;
 using namespace cv::superres;
 using namespace cv::videostab;
 
-#define MEASURE_TIME(op, msg) \
+#define MEASURE_TIME(op) \
     { \
         TickMeter tm; \
         tm.start(); \
         op; \
         tm.stop(); \
-        cout << msg << " Time : " << tm.getTimeSec() << " sec" << endl; \
+        cout << tm.getTimeSec() << " sec" << endl; \
     }
 
 class GrayScaleVideoSource : public IFrameSource
@@ -102,26 +103,30 @@ int main(int argc, const char* argv[])
 
     superRes->setFrameSource(superResSource);
 
-    for (;;)
+    for (int i = 0;; ++i)
     {
         Mat frame = bicubicSource->nextFrame();
+
         if (frame.empty())
             break;
 
-        Mat bicubic;
-        MEASURE_TIME(resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC), "Bi-Cubic");
+        cout << '[' << setw(3) << i << "] : ";
 
         Mat result;
-        MEASURE_TIME(result = superRes->nextFrame(), "Process");
+        MEASURE_TIME(result = superRes->nextFrame());
 
         if (result.empty())
             break;
+
+        Mat bicubic;
+        resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
 
         imshow("Input", frame);
         imshow("Super Resolution", result);
         imshow("BiCubic", bicubic);
 
-        waitKey();
+        if (waitKey(30) > 0)
+            break;
     }
 
     return 0;

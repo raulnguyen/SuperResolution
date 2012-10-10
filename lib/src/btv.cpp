@@ -351,7 +351,7 @@ void cv::superres::BTV_Base::process(const Mat& src, Mat& dst, const vector<Mat>
             addWeighted(X, 1.0, regTerm, -beta * lambda, 0.0, X);
     }
 
-    X.convertTo(dst, CV_8U);
+    X(Rect(btvKernelSize, btvKernelSize, X.cols - 2 * btvKernelSize, X.rows - 2 * btvKernelSize)).convertTo(dst, CV_8U);
 }
 
 void cv::superres::BTV_Base::calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights)

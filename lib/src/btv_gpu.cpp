@@ -253,7 +253,7 @@ void cv::superres::BTV_GPU_Base::process(const GpuMat& src, GpuMat& dst, const s
         Xout.swap(X);
     }
 
-    X.convertTo(dst, CV_8U);
+    X(Rect(btvKernelSize, btvKernelSize, X.cols - 2 * btvKernelSize, X.rows - 2 * btvKernelSize)).convertTo(dst, CV_8U);
 }
 
 void cv::superres::BTV_GPU_Base::calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights)
