@@ -98,8 +98,17 @@ int main(int argc, const char* argv[])
     Ptr<SuperResolution> superRes = SuperResolution::create(SR_BILATERAL_TOTAL_VARIATION, useGpu);
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); superResSource->nextFrame();
-    Ptr<IFrameSource> bicubicSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); bicubicSource->nextFrame();
+    Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));
+    Ptr<IFrameSource> bicubicSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));
+
+    // skip first frame, it is usually corrupted
+    {
+        superResSource->nextFrame();
+        Mat frame = bicubicSource->nextFrame();
+        cout << "Input size : " << frame.cols << 'x' << frame.rows << endl;
+        cout << "Scale factor : " << scale << endl;
+        cout << "Mode : " << (useGpu ? "GPU" : "CPU") << endl;
+    }
 
     superRes->setFrameSource(superResSource);
 
