@@ -84,6 +84,12 @@ int main(int argc, const char* argv[])
         "{ help h  |          | Print help message }"
     );
 
+    if (!cmd.check())
+    {
+        cmd.printErrors();
+        return -1;
+    }
+
     if (cmd.has("help"))
     {
         cmd.about("This sample demonstrates Super Resolution algorithms for video sequence");

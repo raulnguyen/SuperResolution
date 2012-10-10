@@ -124,6 +124,10 @@ namespace cv
             GpuMat regTerm;
             GpuMat buf;
 
+            std::vector<GpuMat> y_cn;
+            std::vector<GpuMat> X_cn;
+            std::vector<GpuMat> Xout_cn;
+
             std::vector<float> btvWeights;
 
             cusparseHandle_t handle;

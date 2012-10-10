@@ -209,7 +209,7 @@ namespace
 
 void cv::superres::BTV_GPU_Base::process(const GpuMat& src, GpuMat& dst, const std::vector<GpuMat>& y, const std::vector<GpuSparseMat_CSR>& DHF, int count)
 {
-    CV_DbgAssert(src.type() == CV_32FC1);
+    CV_DbgAssert(src.depth() == CV_32F);
     CV_DbgAssert(count > 0);
     CV_DbgAssert(y.size() >= count);
     CV_DbgAssert(DHF.size() >= count);
@@ -240,8 +240,34 @@ void cv::superres::BTV_GPU_Base::process(const GpuMat& src, GpuMat& dst, const s
     {
         for (int k = 0; k < count; ++k)
         {
-            calcBtvDiffTerm(y[k], DHF[k], X, diffTerm, buf, handle, descr);
-            addWeighted(k == 0 ? X : Xout, 1.0, diffTerm, -beta, 0.0, Xout);
+            if (src.channels() == 1)
+            {
+                calcBtvDiffTerm(y[k], DHF[k], X, diffTerm, buf, handle, descr);
+                addWeighted(k == 0 ? X : Xout, 1.0, diffTerm, -beta, 0.0, Xout);
+            }
+            else
+            {
+                y_cn.resize(src.channels());
+                X_cn.resize(src.channels());
+                Xout_cn.resize(src.channels());
+
+                for (int c = 0; c < src.channels(); ++c)
+                {
+                    createContinuous(lowResSize, CV_32FC1, y_cn[c]);
+                    createContinuous(highResSize, CV_32FC1, X_cn[c]);
+                }
+
+                split(y[k], y_cn);
+                split(X, X_cn);
+
+                for (int c = 0; c < src.channels(); ++c)
+                {
+                    calcBtvDiffTerm(y_cn[c], DHF[k], X_cn[c], diffTerm, buf, handle, descr);
+                    addWeighted(k == 0 ? X_cn[c] : Xout_cn[c], 1.0, diffTerm, -beta, 0.0, Xout_cn[c]);
+                }
+
+                merge(Xout_cn, Xout);
+            }
         }
 
         if (lambda > 0)
@@ -535,7 +561,6 @@ void cv::superres::BTV_GPU::addNewFrame(const Mat& frame)
     if (frame.empty())
         return;
 
-    CV_DbgAssert(frame.type() == CV_8UC1);
     CV_DbgAssert(storePos < 0 || frame.size() == at(storePos, frames).size());
 
     ++storePos;
