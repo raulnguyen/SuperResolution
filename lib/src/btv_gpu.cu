@@ -79,9 +79,9 @@ namespace cv { namespace gpu { namespace device
 
 namespace btv_device
 {
-    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst, cudaStream_t stream)
+    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst)
     {
-        transform(src1, src2, dst, DiffSign(), WithOutMask(), stream);
+        transform(src1, src2, dst, DiffSign(), WithOutMask(), 0);
     }
 }
 
@@ -117,24 +117,26 @@ namespace
 
 namespace btv_device
 {
+    void loadBtvWeights(const float* weights, size_t count)
+    {
+        cudaSafeCall( cudaMemcpyToSymbol(c_btvRegWeights, weights, count * sizeof(float)) );
+    }
+
     template <int cn>
-    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream)
+    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize)
     {
         typedef typename TypeVec<float, cn>::vec_type src_t;
 
         const dim3 block(32, 8);
         const dim3 grid(divUp(src.cols, block.x), divUp(src.rows, block.y));
 
-        cudaSafeCall( cudaMemcpyToSymbol(c_btvRegWeights, weights, count * sizeof(float)) );
-
-        ::calcBtvRegularization<src_t><<<grid, block, 0, stream>>>((PtrStepSz<src_t>) src, (PtrStepSz<src_t>) dst, ksize);
+        ::calcBtvRegularization<src_t><<<grid, block>>>((PtrStepSz<src_t>) src, (PtrStepSz<src_t>) dst, ksize);
         cudaSafeCall( cudaGetLastError() );
 
-        if (stream == 0)
-            cudaSafeCall( cudaDeviceSynchronize() );
+        cudaSafeCall( cudaDeviceSynchronize() );
     }
 
-    template void calcBtvRegularization<1>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
-    template void calcBtvRegularization<3>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
-    template void calcBtvRegularization<4>(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
+    template void calcBtvRegularization<1>(PtrStepSzb src, PtrStepSzb dst, int ksize);
+    template void calcBtvRegularization<3>(PtrStepSzb src, PtrStepSzb dst, int ksize);
+    template void calcBtvRegularization<4>(PtrStepSzb src, PtrStepSzb dst, int ksize);
 }

@@ -677,10 +677,10 @@ namespace
         Mat_<float> src(10, 10);
         theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
-        Mat_<Point3f> DHF(src.size().area(), 1);
+        Mat DHF(src.size().area(), 1, CV_32SC3);
         for (int y = 0; y < src.rows; ++y)
             for (int x = 0; x < src.cols; ++x)
-                DHF(y * src.rows + x, 0) = Point3f(x, y, 1.0);
+                DHF.at<BTV_Base::DHF_Val>(y * src.rows + x, 0) = BTV_Base::DHF_Val(Point(x, y), 1.0);
 
         Mat_<float> dst;
         mulDhfMat(DHF, src, dst, src.size());
@@ -694,13 +694,13 @@ namespace
         Mat_<float> src(10, 10);
         theRNG().fill(src, RNG::UNIFORM, 0, 255);
 
-        Mat_<Point3f> DHF(src.size().area(), 2);
+        Mat DHF(src.size().area(), 2, CV_32SC3);
         for (int y = 0; y < src.rows; ++y)
         {
             for (int x = 0; x < src.cols; ++x)
             {
-                DHF(y * src.rows + x, 0) = Point3f(x, y, 0.5f);
-                DHF(y * src.rows + x, 1) = Point3f(min(x + 1, src.cols - 1), y, 0.5f);
+                DHF.at<BTV_Base::DHF_Val>(y * src.rows + x, 0) = BTV_Base::DHF_Val(Point(x, y), 0.5f);
+                DHF.at<BTV_Base::DHF_Val>(y * src.rows + x, 1) = BTV_Base::DHF_Val(Point(min(x + 1, src.cols - 1), y), 0.5f);
             }
         }
 
@@ -725,7 +725,7 @@ namespace
         int blurKernelRadius = 2;
         vector<float> blurWeights(blurKernelRadius * blurKernelRadius, 1.0f / (blurKernelRadius * blurKernelRadius));
 
-        Mat_<Point3f> DHF;
+        Mat DHF;
         BTV_Base::calcDhf(lowResSize, scale, blurKernelRadius, blurWeights, MM_AFFINE, Mat_<float>::eye(2, 3), Mat(), DHF);
 
         EXPECT_EQ(lowResSize.area(), DHF.rows);
@@ -739,9 +739,10 @@ namespace
                 {
                     for (int j = 0; j < blurKernelRadius; ++j)
                     {
-                        Point3f gold(x * scale + j - blurKernelRadius / 2, y * scale + i - blurKernelRadius / 2, 1.0f / (blurKernelRadius * blurKernelRadius));
+                        BTV_Base::DHF_Val gold(Point(x * scale + j - blurKernelRadius / 2, y * scale + i - blurKernelRadius / 2), 1.0f / (blurKernelRadius * blurKernelRadius));
 
-                        EXPECT_EQ(gold, DHF.at<Point3f>(y * lowResSize.width + x, i * blurKernelRadius + j));
+                        EXPECT_EQ(gold.coord, DHF.at<BTV_Base::DHF_Val>(y * lowResSize.width + x, i * blurKernelRadius + j).coord);
+                        EXPECT_EQ(gold.weight, DHF.at<BTV_Base::DHF_Val>(y * lowResSize.width + x, i * blurKernelRadius + j).weight);
                     }
                 }
             }
@@ -770,10 +771,10 @@ namespace
     {
         Mat_<float> X(3, 3, 2.0f);
 
-        Mat_<Point3f> DHF(X.size().area(), 1);
+        Mat DHF(X.size().area(), 1, CV_32SC3);
         for (int y = 0; y < X.rows; ++y)
             for (int x = 0; x < X.cols; ++x)
-                DHF(y * X.rows + x, 0) = Point3f(x, y, 1.0f);
+                DHF.at<BTV_Base::DHF_Val>(y * X.rows + x, 0) = BTV_Base::DHF_Val(Point(x, y), 1.0f);
 
         Mat_<float> y(3, 3);
         y << 1,1,1,2,2,2,3,3,3;

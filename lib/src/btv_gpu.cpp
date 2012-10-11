@@ -26,7 +26,6 @@
 #include "btv_gpu.hpp"
 #include <opencv2/core/internal.hpp>
 #include <opencv2/gpu/gpu.hpp>
-#include <opencv2/gpu/stream_accessor.hpp>
 #include <opencv2/videostab/ring_buffer.hpp>
 #ifdef WITH_TESTS
     #include <cuda_runtime.h>
@@ -48,10 +47,11 @@ using namespace cv::gpu;
 
 namespace btv_device
 {
-    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst, cudaStream_t stream);
+    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst);
 
+    void loadBtvWeights(const float* weights, size_t count);
     template <int cn>
-    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
+    void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize);
 }
 
 ///////////////////////////////////////////////////////////////
@@ -59,7 +59,15 @@ namespace btv_device
 
 void cv::superres::GpuSparseMat_CSR::create(int rows, int cols, int nonZeroCount, int type)
 {
-    size_t bytesPerRow = std::max(nonZeroCount * std::max(sizeof(int), (size_t) CV_ELEM_SIZE(type)), (rows + 1) * sizeof(int));
+    CV_DbgAssert(rows > 0);
+    CV_DbgAssert(cols > 0);
+    CV_DbgAssert(nonZeroCount > 0 && nonZeroCount <= rows * cols);
+
+    const size_t valsSize = nonZeroCount * CV_ELEM_SIZE(type);
+    const size_t rowPtrSize = (rows + 1) * sizeof(int);
+    const size_t colIndSize = nonZeroCount * sizeof(int);
+
+    const size_t bytesPerRow = std::max(std::max(valsSize, rowPtrSize), colIndSize);
 
     data_.create(3, bytesPerRow, CV_8U);
 
@@ -128,6 +136,8 @@ namespace
                 for (int l = ksize; l + m >= 0; --l, ++ind)
                     btvWeights[ind] = static_cast<float>(pow(alpha, std::abs(m) + std::abs(l)));
             }
+
+            btv_device::loadBtvWeights(&btvWeights[0], size);
         }
     }
 
@@ -160,7 +170,7 @@ namespace
         cudaSafeCall( cudaDeviceSynchronize() );
     }
 
-    void diffSign(const GpuMat& src1, const GpuMat& src2, GpuMat& dst, Stream& stream = Stream::Null())
+    void diffSign(const GpuMat& src1, const GpuMat& src2, GpuMat& dst)
     {
         CV_DbgAssert(src1.depth() == CV_32F);
         CV_DbgAssert(src1.type() == src2.type());
@@ -168,7 +178,7 @@ namespace
 
         dst.create(src1.size(), src1.type());
 
-        btv_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1), StreamAccessor::getStream(stream));
+        btv_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1));
     }
 
     void calcBtvDiffTerm(const GpuMat& y, const GpuSparseMat_CSR& DHF, const GpuMat& X, GpuMat& diffTerm, GpuMat& buf,
@@ -181,9 +191,9 @@ namespace
         mulSparseMat(handle, descr, DHF, buf, diffTerm, X.size(), true);
     }
 
-    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize, const vector<float>& btvWeights)
+    void calcBtvRegularization(const GpuMat& X, GpuMat& dst, int btvKernelSize)
     {
-        typedef void (*func_t)(PtrStepSzb src, PtrStepSzb dst, int ksize, const float* weights, int count, cudaStream_t stream);
+        typedef void (*func_t)(PtrStepSzb src, PtrStepSzb dst, int ksize);
         static const func_t funcs[] =
         {
             0,
@@ -196,14 +206,13 @@ namespace
         CV_DbgAssert(X.depth() == CV_32F);
         CV_DbgAssert(X.channels() == 1 || X.channels() == 3 || X.channels() == 4);
         CV_DbgAssert(btvKernelSize > 0 && btvKernelSize <= 16);
-        CV_DbgAssert(btvWeights.size() == btvKernelSize * btvKernelSize);
 
         dst.create(X.size(), X.type());
         dst.setTo(Scalar::all(0));
 
         const int ksize = (btvKernelSize - 1) / 2;
 
-        funcs[X.channels()](X, dst, ksize, &btvWeights[0], static_cast<int>(btvWeights.size()), 0);
+        funcs[X.channels()](X, dst, ksize);
     }
 }
 
@@ -272,7 +281,7 @@ void cv::superres::BTV_GPU_Base::process(const GpuMat& src, GpuMat& dst, const s
 
         if (lambda > 0)
         {
-            calcBtvRegularization(X, regTerm, btvKernelSize, btvWeights);
+            calcBtvRegularization(X, regTerm, btvKernelSize);
             addWeighted(Xout, 1.0, regTerm, -beta * lambda, 0.0, Xout);
         }
 
@@ -377,8 +386,10 @@ namespace
         Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
         vals.clear();
-        rowPtr.resize(lowResSize.area() + 1, 0);
+        rowPtr.clear();
         colInd.clear();
+
+        rowPtr.resize(lowResSize.area() + 1, 0);
 
         for (int y = 0, lowResInd = 0; y < lowResSize.height; ++y)
         {
