@@ -25,70 +25,61 @@
 
 #pragma once
 
-#ifndef __SUPER_RESOLUTION_HPP__
-#define __SUPER_RESOLUTION_HPP__
+#ifndef __TV_L1_HPP__
+#define __TV_L1_HPP__
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/videostab/motion_core.hpp>
-#include <opencv2/videostab/frame_source.hpp>
+#include <vector>
+#include "super_resolution.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
-        using videostab::IFrameSource;
-        using videostab::NullFrameSource;
-        using videostab::VideoFileSource;
+        using std::vector;
 
-        using cv::videostab::MotionModel;
-        using cv::videostab::MM_TRANSLATION;
-        using cv::videostab::MM_TRANSLATION_AND_SCALE;
-        using cv::videostab::MM_ROTATION;
-        using cv::videostab::MM_RIGID;
-        using cv::videostab::MM_SIMILARITY;
-        using cv::videostab::MM_AFFINE;
-        using cv::videostab::MM_HOMOGRAPHY;
-        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
-
-        enum BlurModel
-        {
-            BLUR_BOX,
-            BLUR_GAUSS
-        };
-
-        enum SRMethod
-        {
-            SR_BILATERAL_TOTAL_VARIATION,
-            SR_TV_L1,
-            SR_METHOD_MAX
-        };
-
-        class SUPER_RESOLUTION_EXPORT SuperResolution : public Algorithm, public IFrameSource
+        // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow
+        class SUPER_RESOLUTION_NO_EXPORT TV_L1_Base
         {
         public:
-            static Ptr<SuperResolution> create(SRMethod method, bool useGpu = false);
+            TV_L1_Base();
 
-            virtual ~SuperResolution();
+            void process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx);
 
-            void setFrameSource(const Ptr<IFrameSource>& frameSource);
-
-            void reset();
-            Mat nextFrame();
-
-        protected:
-            SuperResolution();
-
-            virtual void initImpl(Ptr<IFrameSource>& frameSource) = 0;
-            virtual Mat processImpl(Ptr<IFrameSource>& frameSource) = 0;
-
-        private:
-            Ptr<IFrameSource> frameSource;
-            bool firstCall;
+            int scale;
+            int iterations;
+            double lambda;
+            double tau;
         };
 
-        SUPER_RESOLUTION_EXPORT bool initModule_superres();
+        class SUPER_RESOLUTION_NO_EXPORT TV_L1 : public SuperResolution, private TV_L1_Base
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            static bool init();
+            static Ptr<SuperResolution> create();
+
+            TV_L1();
+
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(Ptr<IFrameSource>& frameSource);
+
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
+
+            int temporalAreaRadius;
+
+            std::vector<Mat> frames;
+            std::vector<Mat> results;
+
+            int storePos;
+            int procPos;
+            int outPos;
+        };
     }
 }
 
-#endif // __SUPER_RESOLUTION_HPP__
+#endif // __TV_L1_HPP__
