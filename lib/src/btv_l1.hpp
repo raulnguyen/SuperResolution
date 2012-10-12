@@ -47,7 +47,7 @@ namespace cv
         public:
             BTV_L1_Base();
 
-            void process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx);
+            void process(const vector<Mat>& src, Mat& dst, const vector<Mat_<Point2f> >& relMotions, int startIdx, int procIdx, int endIdx);
 
             int scale;
             int iterations;
@@ -61,13 +61,9 @@ namespace cv
         private:
             vector<float> btvWeights;
 
-            Mat gray0, gray1;
-
             vector<Mat_<Point2f> > lowResMotions;
             vector<Mat_<Point2f> > highResMotions;
             vector<Mat_<Point2f> > forward, backward;
-
-            vector<Mat> src_f;
 
             Ptr<FilterEngine> filter;
             int curBlurKernelSize;
@@ -103,6 +99,10 @@ namespace cv
 
             vector<Mat> frames;
             vector<Mat> results;
+
+            Mat gray0, gray1;
+            vector<Mat_<Point2f> > motions;
+            Mat prevFrame;
 
             int storePos;
             int procPos;

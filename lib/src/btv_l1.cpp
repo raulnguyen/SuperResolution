@@ -91,15 +91,20 @@ namespace
                                  /*flags =*/ 0);
     }
 
-    void calcMotions(const vector<Mat>& src, int startIdx, int procIdx, int endIdx, vector<Mat_<Point2f> >& motions, Mat& gray0, Mat& gray1)
+    void calcMotions(const vector<Mat_<Point2f> >& relMotions, int startIdx, int procIdx, int endIdx, vector<Mat_<Point2f> >& motions)
     {
         CV_DbgAssert( !src.empty() );
         CV_DbgAssert( startIdx <= procIdx && procIdx <= endIdx );
 
-        motions.resize(src.size());
+        motions.resize(endIdx - startIdx + 1);
 
-        for (int i = startIdx; i <= endIdx; ++i)
-            calcOpticalFlow(at(i, src), at(procIdx, src), at(i, motions), gray0, gray1);
+        at(procIdx, motions).create(at(procIdx, relMotions).size());
+        at(procIdx, motions).setTo(Scalar::all(0));
+
+        for (int i = procIdx - 1; i >= startIdx; --i)
+            add(at(i + 1, motions), at(i, relMotions), at(i, motions));
+        for (int i = procIdx; i < endIdx; ++i)
+            subtract(at(i, motions), at(i, relMotions), at(i + 1, motions));
     }
 
     void upscaleMotions(const vector<Mat_<Point2f> >& lowResMotions, vector<Mat_<Point2f> >& highResMotions, int scale)
@@ -318,7 +323,7 @@ namespace
     }
 }
 
-void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx)
+void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, const vector<Mat_<Point2f> >& relMotions, int startIdx, int procIdx, int endIdx)
 {
     CV_DbgAssert( !src.empty() );
     CV_DbgAssert( procIdx >= startIdx && endIdx >= procIdx );
@@ -332,15 +337,9 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
 #endif
     CV_DbgAssert( blurKernelSize > 0 );
 
-    // convert sources to float
-
-    src_f.resize(src.size());
-    for (size_t i = 0; i < src.size(); ++i)
-        src[i].convertTo(src_f[i], CV_32F);
-
     // calc motions between input frames
 
-    calcMotions(src, startIdx, procIdx, endIdx, lowResMotions, gray0, gray1);
+    calcMotions(relMotions, startIdx, procIdx, endIdx, lowResMotions);
     upscaleMotions(lowResMotions, highResMotions, scale);
 
     forward.resize(highResMotions.size());
@@ -350,12 +349,12 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
 
     // update blur filter and btv weights
 
-    if (filter.empty() || blurKernelSize != curBlurKernelSize || blurSigma != curBlurSigma || src_f[0].type() != curSrcType)
+    if (filter.empty() || blurKernelSize != curBlurKernelSize || blurSigma != curBlurSigma || src[0].type() != curSrcType)
     {
-        filter = createGaussianFilter(src_f[0].type(), Size(blurKernelSize, blurKernelSize), blurSigma);
+        filter = createGaussianFilter(src[0].type(), Size(blurKernelSize, blurKernelSize), blurSigma);
         curBlurKernelSize = blurKernelSize;
         curBlurSigma = blurSigma;
-        curSrcType = src_f[0].type();
+        curSrcType = src[0].type();
     }
 
     calcBtvWeights(btvKernelSize, alpha, btvWeights);
@@ -365,7 +364,7 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
     const Size lowResSize = src[0].size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
-    resize(at(procIdx, src_f), highRes, highResSize, 0, 0, INTER_CUBIC);
+    resize(at(procIdx, src), highRes, highResSize, 0, 0, INTER_CUBIC);
 
     // iterations
 
@@ -389,7 +388,7 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
             // c = DHF * Ih
             resize(b, c, lowResSize, 0, 0, INTER_NEAREST);
 
-            diffSign(src_f[k], c, diff);
+            diffSign(src[k], c, diff);
 
             // d = Dt * diff
             upscale(diff, d, scale);
@@ -411,7 +410,7 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
-    highRes(inner).convertTo(dst, src[0].depth());
+    highRes(inner).convertTo(dst, CV_8U);
 }
 
 namespace cv
@@ -462,6 +461,7 @@ void cv::superres::BTV_L1::initImpl(Ptr<IFrameSource>& frameSource)
 
     frames.resize(cacheSize);
     results.resize(cacheSize);
+    motions.resize(cacheSize);
 
     storePos = -1;
 
@@ -507,10 +507,19 @@ void cv::superres::BTV_L1::addNewFrame(const Mat& frame)
     CV_DbgAssert( storePos < 0 || frame.size() == at(storePos, frames).size() );
 
     ++storePos;
-    frame.copyTo(at(storePos, frames));
+    frame.convertTo(at(storePos, frames), CV_32F);
+
+    if (storePos > 0)
+        calcOpticalFlow(prevFrame, frame, at(storePos - 1, motions), gray0, gray1);
+
+    frame.copyTo(prevFrame);
 }
 
 void cv::superres::BTV_L1::processFrame(int idx)
 {
-    process(frames, at(idx, results), idx - temporalAreaRadius, idx, idx + temporalAreaRadius);
+    const int startIdx = std::max(idx - temporalAreaRadius, 0);
+    const int procIdx = idx;
+    const int endIdx = std::min(startIdx + 2 * temporalAreaRadius, storePos);
+
+    process(frames, at(idx, results), motions, startIdx, procIdx, endIdx);
 }
