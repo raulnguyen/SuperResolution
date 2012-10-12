@@ -25,8 +25,8 @@
 
 #pragma once
 
-#ifndef __TV_L1_GPU_HPP__
-#define __TV_L1_GPU_HPP__
+#ifndef __BTV_L1_GPU_HPP__
+#define __BTV_L1_GPU_HPP__
 
 #include <vector>
 #include <opencv2/core/core.hpp>
@@ -44,10 +44,10 @@ namespace cv
 
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
         // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
-        class SUPER_RESOLUTION_NO_EXPORT TV_L1_GPU_Base
+        class SUPER_RESOLUTION_NO_EXPORT BTV_L1_GPU_Base
         {
         public:
-            TV_L1_GPU_Base();
+            BTV_L1_GPU_Base();
 
             void process(const vector<GpuMat>& src, GpuMat& dst, int startIdx, int procIdx, int endIdx);
 
@@ -84,7 +84,7 @@ namespace cv
             GpuMat a, b, c, d;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT TV_L1_GPU : public SuperResolution, private TV_L1_GPU_Base
+        class SUPER_RESOLUTION_NO_EXPORT BTV_L1_GPU : public SuperResolution, private BTV_L1_GPU_Base
         {
         public:
             AlgorithmInfo* info() const;
@@ -92,7 +92,7 @@ namespace cv
             static bool init();
             static Ptr<SuperResolution> create();
 
-            TV_L1_GPU();
+            BTV_L1_GPU();
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);

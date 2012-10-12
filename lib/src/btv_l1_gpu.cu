@@ -25,12 +25,84 @@
 
 #include <opencv2/gpu/device/common.hpp>
 #include <opencv2/gpu/device/transform.hpp>
-#include <opencv2/gpu/device/functional.hpp>
 #include <opencv2/gpu/device/vec_traits.hpp>
 #include <opencv2/gpu/device/vec_math.hpp>
 
 using namespace cv::gpu;
 using namespace cv::gpu::device;
+
+namespace
+{
+    __global__ void buildMotionMaps(const PtrStepSzf motionx, const PtrStepf motiony,
+                                    PtrStepf forwardx, PtrStepf forwardy,
+                                    PtrStepf backwardx, PtrStepf backwardy)
+    {
+        const int x = blockIdx.x * blockDim.x + threadIdx.x;
+        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x >= motionx.cols || y >= motionx.rows)
+            return;
+
+        const float mx = motionx(y, x);
+        const float my = motiony(y, x);
+
+        forwardx(y, x) = x - mx;
+        forwardy(y, x) = y - my;
+
+        backwardx(y, x) = x + mx;
+        backwardy(y, x) = y + my;
+    }
+}
+
+namespace btv_l1_device
+{
+    void buildMotionMaps(PtrStepSzf motionx, PtrStepSzf motiony, PtrStepSzf forwardx, PtrStepSzf forwardy, PtrStepSzf backwardx, PtrStepSzf backwardy)
+    {
+        const dim3 block(32, 8);
+        const dim3 grid(divUp(motionx.cols, block.x), divUp(motionx.rows, block.y));
+
+        ::buildMotionMaps<<<grid, block>>>(motionx, motiony, forwardx, forwardy, backwardx, backwardy);
+        cudaSafeCall( cudaGetLastError() );
+
+        cudaSafeCall( cudaDeviceSynchronize() );
+    }
+}
+
+namespace
+{
+    template <typename T>
+    __global__ void upscale(const PtrStepSz<T> src, PtrStep<T> dst, const int scale)
+    {
+        const int x = blockIdx.x * blockDim.x + threadIdx.x;
+        const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x >= src.cols || y >= src.rows)
+            return;
+
+        dst(y * scale, x * scale) = src(y, x);
+    }
+}
+
+namespace btv_l1_device
+{
+    template <int cn>
+    void upscale(const PtrStepSzb src, PtrStepSzb dst, int scale)
+    {
+        typedef typename TypeVec<float, cn>::vec_type src_t;
+
+        const dim3 block(32, 8);
+        const dim3 grid(divUp(src.cols, block.x), divUp(src.rows, block.y));
+
+        ::upscale<src_t><<<grid, block>>>((PtrStepSz<src_t>) src, (PtrStepSz<src_t>) dst, scale);
+        cudaSafeCall( cudaGetLastError() );
+
+        cudaSafeCall( cudaDeviceSynchronize() );
+    }
+
+    template void upscale<1>(const PtrStepSzb src, PtrStepSzb dst, int scale);
+    template void upscale<3>(const PtrStepSzb src, PtrStepSzb dst, int scale);
+    template void upscale<4>(const PtrStepSzb src, PtrStepSzb dst, int scale);
+}
 
 namespace
 {
@@ -65,9 +137,6 @@ namespace
     };
 }
 
-////////////////////////////////////////////////////////////
-// diffSign
-
 namespace cv { namespace gpu { namespace device
 {
     template <> struct TransformFunctorTraits<DiffSign> : DefaultTransformFunctorTraits<DiffSign>
@@ -77,16 +146,13 @@ namespace cv { namespace gpu { namespace device
     };
 }}}
 
-namespace btv_device
+namespace btv_l1_device
 {
     void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst)
     {
         transform(src1, src2, dst, DiffSign(), WithOutMask(), 0);
     }
 }
-
-////////////////////////////////////////////////////////////
-// BtvRegularization
 
 namespace
 {
@@ -115,7 +181,7 @@ namespace
     }
 }
 
-namespace btv_device
+namespace btv_l1_device
 {
     void loadBtvWeights(const float* weights, size_t count)
     {

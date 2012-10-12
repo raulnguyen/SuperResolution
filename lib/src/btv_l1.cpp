@@ -23,7 +23,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "tv-l1.hpp"
+#include "btv_l1.hpp"
 #include <opencv2/core/internal.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/video/tracking.hpp>
@@ -34,7 +34,7 @@ using namespace cv;
 using namespace cv::videostab;
 using namespace cv::superres;
 
-cv::superres::TV_L1_Base::TV_L1_Base()
+cv::superres::BTV_L1_Base::BTV_L1_Base()
 {
     scale = 4;
     iterations = 180;
@@ -328,7 +328,7 @@ namespace
     }
 }
 
-void cv::superres::TV_L1_Base::process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx)
+void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx)
 {
     CV_DbgAssert( !src.empty() );
     CV_DbgAssert( procIdx >= startIdx && endIdx >= procIdx );
@@ -429,7 +429,7 @@ namespace cv
 {
     namespace superres
     {
-        CV_INIT_ALGORITHM(TV_L1, "SuperResolution.TV_L1",
+        CV_INIT_ALGORITHM(BTV_L1, "SuperResolution.BTV_L1",
                           obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                                "Scale factor.");
                           obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
@@ -451,23 +451,23 @@ namespace cv
     }
 }
 
-bool cv::superres::TV_L1::init()
+bool cv::superres::BTV_L1::init()
 {
-    return !TV_L1_info_auto.name().empty();
+    return !BTV_L1_info_auto.name().empty();
 }
 
-Ptr<SuperResolution> cv::superres::TV_L1::create()
+Ptr<SuperResolution> cv::superres::BTV_L1::create()
 {
-    Ptr<SuperResolution> alg(new TV_L1);
+    Ptr<SuperResolution> alg(new BTV_L1);
     return alg;
 }
 
-cv::superres::TV_L1::TV_L1()
+cv::superres::BTV_L1::BTV_L1()
 {
     temporalAreaRadius = 4;
 }
 
-void cv::superres::TV_L1::initImpl(Ptr<IFrameSource>& frameSource)
+void cv::superres::BTV_L1::initImpl(Ptr<IFrameSource>& frameSource)
 {
     const int cacheSize = 2 * temporalAreaRadius + 1;
 
@@ -490,7 +490,7 @@ void cv::superres::TV_L1::initImpl(Ptr<IFrameSource>& frameSource)
     outPos = -1;
 }
 
-Mat cv::superres::TV_L1::processImpl(Ptr<IFrameSource>& frameSource)
+Mat cv::superres::BTV_L1::processImpl(Ptr<IFrameSource>& frameSource)
 {
     Mat frame = frameSource->nextFrame();
     addNewFrame(frame);
@@ -510,7 +510,7 @@ Mat cv::superres::TV_L1::processImpl(Ptr<IFrameSource>& frameSource)
     return Mat();
 }
 
-void cv::superres::TV_L1::addNewFrame(const Mat& frame)
+void cv::superres::BTV_L1::addNewFrame(const Mat& frame)
 {
     if (frame.empty())
         return;
@@ -521,7 +521,7 @@ void cv::superres::TV_L1::addNewFrame(const Mat& frame)
     frame.copyTo(at(storePos, frames));
 }
 
-void cv::superres::TV_L1::processFrame(int idx)
+void cv::superres::BTV_L1::processFrame(int idx)
 {
     process(frames, at(idx, results), idx - temporalAreaRadius, idx, idx + temporalAreaRadius);
 }

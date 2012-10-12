@@ -24,10 +24,8 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "super_resolution.hpp"
-#include "btv.hpp"
-#include "btv_gpu.hpp"
-#include "tv-l1.hpp"
-#include "tv-l1_gpu.hpp"
+#include "btv_l1.hpp"
+#include "btv_l1_gpu.hpp"
 
 using namespace std;
 using namespace cv;
@@ -37,11 +35,8 @@ bool cv::superres::initModule_superres()
 {
     bool all = true;
 
-    all &= BTV::init();
-    all &= BTV_GPU::init();
-
-    all &= TV_L1::init();
-    all &= TV_L1_GPU::init();
+    all &= BTV_L1::init();
+    all &= BTV_L1_GPU::init();
 
     return all;
 }
@@ -51,16 +46,14 @@ Ptr<SuperResolution> cv::superres::SuperResolution::create(SRMethod method, bool
     typedef Ptr<SuperResolution> (*func_t)();
     static const func_t cpu_funcs[] =
     {
-        BTV::create,
-        TV_L1::create
+        BTV_L1::create
     };
     static const func_t gpu_funcs[] =
     {
-        BTV_GPU::create,
-        TV_L1_GPU::create
+        BTV_L1_GPU::create
     };
 
-    CV_DbgAssert(method >= SR_BILATERAL_TOTAL_VARIATION && method < SR_METHOD_MAX);
+    CV_DbgAssert( method >= SR_BTV_L1 && method < SR_METHOD_MAX );
 
     const func_t func = (useGpu ? gpu_funcs : cpu_funcs)[method];
     CV_Assert( func != 0 );

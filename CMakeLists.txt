@@ -27,7 +27,6 @@ set(PROJECT_COPYRIGHT_YEAR "2012")
 
 option(BUILD_SHARED_LIBS "Build shared libraries (.dll/.so) instead of static ones (.lib/.a)" ON)
 option(BUILD_SAMPLE_APPS "Build sample applications" ON)
-option(BUILD_TESTS "Build tests" OFF)
 
 option(BUILD_WITH_CUDA "Build with CUDA support" OFF)
 
@@ -61,10 +60,6 @@ add_subdirectory(lib)
 
 if(BUILD_SAMPLE_APPS)
     add_subdirectory(samples)
-endif()
-
-if(BUILD_TESTS)
-    add_subdirectory(test)
 endif()
 
 ############### Install ################
@@ -131,7 +126,6 @@ message(STATUS "=============== Build options ===============")
 message(STATUS "")
 message(STATUS "Build shared libraries    : ${BUILD_SHARED_LIBS}")
 message(STATUS "Build sample applications : ${BUILD_SAMPLE_APPS}")
-message(STATUS "Build tests               : ${BUILD_TESTS}")
 message(STATUS "")
 message(STATUS "CUDA support : ${BUILD_WITH_CUDA}")
 

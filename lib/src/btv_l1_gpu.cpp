@@ -23,7 +23,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "tv-l1_gpu.hpp"
+#include "btv_l1_gpu.hpp"
 #include <opencv2/core/internal.hpp>
 #include <opencv2/videostab/ring_buffer.hpp>
 
@@ -33,8 +33,7 @@ using namespace cv::gpu;
 using namespace cv::videostab;
 using namespace cv::superres;
 
-
-namespace tv_l1_device
+namespace btv_l1_device
 {
     void buildMotionMaps(PtrStepSzf motionx, PtrStepSzf motiony,
                          PtrStepSzf forwardx, PtrStepSzf forwardy,
@@ -49,7 +48,7 @@ namespace tv_l1_device
     template <int cn> void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize);
 }
 
-cv::superres::TV_L1_GPU_Base::TV_L1_GPU_Base()
+cv::superres::BTV_L1_GPU_Base::BTV_L1_GPU_Base()
 {
     scale = 4;
     iterations = 180;
@@ -157,7 +156,7 @@ namespace
         backward.first.create(motion.first.size(), motion.first.type());
         backward.second.create(motion.first.size(), motion.first.type());
 
-        tv_l1_device::buildMotionMaps(motion.first, motion.second, forward.first, forward.second, backward.first, backward.second);
+        btv_l1_device::buildMotionMaps(motion.first, motion.second, forward.first, forward.second, backward.first, backward.second);
     }
 
     void upscale(const GpuMat& src, GpuMat& dst, int scale)
@@ -165,7 +164,7 @@ namespace
         typedef void (*func_t)(const PtrStepSzb src, PtrStepSzb dst, int scale);
         static const func_t funcs[] =
         {
-            0, tv_l1_device::upscale<1>, 0, tv_l1_device::upscale<3>, tv_l1_device::upscale<4>
+            0, btv_l1_device::upscale<1>, 0, btv_l1_device::upscale<3>, btv_l1_device::upscale<4>
         };
 
         CV_DbgAssert( src.depth() == CV_32F );
@@ -188,7 +187,7 @@ namespace
 
         dst.create(src1.size(), src1.type());
 
-        tv_l1_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1));
+        btv_l1_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1));
     }
 
     void calcBtvWeights(int btvKernelSize, double alpha, vector<float>& btvWeights)
@@ -212,7 +211,7 @@ namespace
                     btvWeights[ind] = pow(alpha_f, std::abs(m) + std::abs(l));
             }
 
-            tv_l1_device::loadBtvWeights(&btvWeights[0], size);
+            btv_l1_device::loadBtvWeights(&btvWeights[0], size);
         }
     }
 
@@ -222,10 +221,10 @@ namespace
         static const func_t funcs[] =
         {
             0,
-            tv_l1_device::calcBtvRegularization<1>,
+            btv_l1_device::calcBtvRegularization<1>,
             0,
-            tv_l1_device::calcBtvRegularization<3>,
-            tv_l1_device::calcBtvRegularization<4>
+            btv_l1_device::calcBtvRegularization<3>,
+            btv_l1_device::calcBtvRegularization<4>
         };
 
         CV_DbgAssert( src.depth() == CV_32F );
@@ -241,7 +240,7 @@ namespace
     }
 }
 
-void cv::superres::TV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& dst, int startIdx, int procIdx, int endIdx)
+void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& dst, int startIdx, int procIdx, int endIdx)
 {
     CV_DbgAssert( !src.empty() );
     CV_DbgAssert( procIdx >= startIdx && endIdx >= procIdx );
@@ -342,7 +341,7 @@ namespace cv
 {
     namespace superres
     {
-        CV_INIT_ALGORITHM(TV_L1_GPU, "SuperResolution.TV_L1_GPU",
+        CV_INIT_ALGORITHM(BTV_L1_GPU, "SuperResolution.BTV_L1_GPU",
                           obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
                                                "Scale factor.");
                           obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
@@ -364,23 +363,23 @@ namespace cv
     }
 }
 
-bool cv::superres::TV_L1_GPU::init()
+bool cv::superres::BTV_L1_GPU::init()
 {
-    return !TV_L1_GPU_info_auto.name().empty();
+    return !BTV_L1_GPU_info_auto.name().empty();
 }
 
-Ptr<SuperResolution> cv::superres::TV_L1_GPU::create()
+Ptr<SuperResolution> cv::superres::BTV_L1_GPU::create()
 {
-    Ptr<SuperResolution> alg(new TV_L1_GPU);
+    Ptr<SuperResolution> alg(new BTV_L1_GPU);
     return alg;
 }
 
-cv::superres::TV_L1_GPU::TV_L1_GPU()
+cv::superres::BTV_L1_GPU::BTV_L1_GPU()
 {
     temporalAreaRadius = 4;
 }
 
-void cv::superres::TV_L1_GPU::initImpl(Ptr<IFrameSource>& frameSource)
+void cv::superres::BTV_L1_GPU::initImpl(Ptr<IFrameSource>& frameSource)
 {
     const int cacheSize = 2 * temporalAreaRadius + 1;
 
@@ -403,7 +402,7 @@ void cv::superres::TV_L1_GPU::initImpl(Ptr<IFrameSource>& frameSource)
     outPos = -1;
 }
 
-Mat cv::superres::TV_L1_GPU::processImpl(Ptr<IFrameSource>& frameSource)
+Mat cv::superres::BTV_L1_GPU::processImpl(Ptr<IFrameSource>& frameSource)
 {
     Mat frame = frameSource->nextFrame();
     addNewFrame(frame);
@@ -424,7 +423,7 @@ Mat cv::superres::TV_L1_GPU::processImpl(Ptr<IFrameSource>& frameSource)
     return Mat();
 }
 
-void cv::superres::TV_L1_GPU::addNewFrame(const Mat& frame)
+void cv::superres::BTV_L1_GPU::addNewFrame(const Mat& frame)
 {
     if (frame.empty())
         return;
@@ -435,7 +434,7 @@ void cv::superres::TV_L1_GPU::addNewFrame(const Mat& frame)
     at(storePos, frames).upload(frame);
 }
 
-void cv::superres::TV_L1_GPU::processFrame(int idx)
+void cv::superres::BTV_L1_GPU::processFrame(int idx)
 {
     process(frames, at(idx, results), idx - temporalAreaRadius, idx, idx + temporalAreaRadius);
 }
