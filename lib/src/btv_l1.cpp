@@ -330,7 +330,6 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
         CV_DbgAssert( src[i].type() == src[0].type() );
     }
 #endif
-    CV_DbgAssert( blurModel == BLUR_BOX || blurModel == BLUR_GAUSS );
     CV_DbgAssert( blurKernelSize > 0 );
 
     // convert sources to float
