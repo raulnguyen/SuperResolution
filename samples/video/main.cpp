@@ -101,7 +101,7 @@ int main(int argc, const char* argv[])
     const int scale = cmd.get<int>("scale");
     const bool useGpu = cmd.has("gpu");
 
-    Ptr<SuperResolution> superRes = SuperResolution::create(SR_BILATERAL_TOTAL_VARIATION, useGpu);
+    Ptr<SuperResolution> superRes = SuperResolution::create(SR_TV_L1, useGpu);
     superRes->set("scale", scale);
 
     Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));

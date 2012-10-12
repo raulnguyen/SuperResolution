@@ -29,6 +29,8 @@
 #define __TV_L1_HPP__
 
 #include <vector>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include "super_resolution.hpp"
 #include "super_resolution_export.h"
 
@@ -50,6 +52,32 @@ namespace cv
             int iterations;
             double lambda;
             double tau;
+            double alpha;
+            int btvKernelSize;
+            int blurModel;
+            int blurKernelSize;
+
+        private:
+            vector<float> btvWeights;
+
+            Mat gray0, gray1;
+
+            vector<Mat_<Point2f> > lowResMotions;
+            vector<Mat_<Point2f> > highResMotions;
+            vector<Mat_<Point2f> > forward, backward;
+
+            vector<Mat> src_f;
+
+            Ptr<FilterEngine> filter;
+            int curBlurModel;
+            int curBlurKernelSize;
+            int curSrcType;
+
+            Mat highRes;
+
+            Mat diffTerm, regTerm;
+            Mat diff;
+            Mat a, b, c, d;
         };
 
         class SUPER_RESOLUTION_NO_EXPORT TV_L1 : public SuperResolution, private TV_L1_Base
