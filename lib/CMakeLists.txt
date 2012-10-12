@@ -17,10 +17,6 @@ include(GenerateExportHeader)
 
 add_compiler_export_flags()
 
-if(BUILD_TESTS)
-    add_definitions(-DWITH_TESTS)
-endif()
-
 if(BUILD_WITH_CUDA)
     add_definitions(-DWITH_CUDA)
     file(GLOB CUDA_SOURCE_FILES "src/*.cu")
@@ -36,7 +32,7 @@ generate_export_header(${TARGET_NAME})
 target_link_libraries(${TARGET_NAME} ${OpenCV_LIBS})
 
 if(BUILD_WITH_CUDA)
-    target_link_libraries(${TARGET_NAME} ${CUDA_LIBRARIES} ${CUDA_cusparse_LIBRARY})
+    target_link_libraries(${TARGET_NAME} ${CUDA_LIBRARIES})
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES VERSION ${PROJECT_VERSION})

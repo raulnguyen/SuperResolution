@@ -25,56 +25,66 @@
 
 #pragma once
 
-#ifndef __BTV_HPP__
-#define __BTV_HPP__
+#ifndef __BTV_L1_GPU_HPP__
+#define __BTV_L1_GPU_HPP__
 
 #include <vector>
+#include <opencv2/core/core.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include "super_resolution.hpp"
-#include "motion_estimation.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
+        using std::vector;
+        using std::pair;
+        using cv::gpu::GpuMat;
+
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
-        class SUPER_RESOLUTION_NO_EXPORT BTV_Base
+        // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
+        class SUPER_RESOLUTION_NO_EXPORT BTV_L1_GPU_Base
         {
         public:
-            struct DHF_Val
-            {
-                Point coord;
-                float weight;
-                DHF_Val(Point coord, float weight) : coord(coord), weight(weight) {}
-            };
+            BTV_L1_GPU_Base();
 
-            BTV_Base();
-
-            void process(const Mat& src, Mat& dst, const std::vector<Mat>& y, const std::vector<Mat>& DHF, int count);
-
-            static void calcBlurWeights(BlurModel blurModel, int blurKernelSize, std::vector<float>& blurWeights);
-            static void calcDhf(Size lowResSize, int scale, int blurKernelSize, const std::vector<float>& blurWeights,
-                                MotionModel motionModel, const Mat& m1, const Mat& m2, Mat& DHF);
+            void process(const vector<GpuMat>& src, GpuMat& dst, int startIdx, int procIdx, int endIdx);
 
             int scale;
             int iterations;
-            double beta;
             double lambda;
+            double tau;
             double alpha;
             int btvKernelSize;
+            int blurModel;
+            int blurKernelSize;
 
         private:
-            Mat X;
+            vector<float> btvWeights;
 
-            std::vector<Mat> diffTerms;
-            std::vector<Mat> bufs;
+            GpuMat gray0, gray1;
+            gpu::FarnebackOpticalFlow opticalFlow;
 
-            Mat regTerm;
+            vector<pair<GpuMat, GpuMat> > lowResMotions;
+            vector<pair<GpuMat, GpuMat> > highResMotions;
+            vector<pair<GpuMat, GpuMat> > forward, backward;
 
-            std::vector<float> btvWeights;
+            vector<GpuMat> src_f;
+
+            Ptr<gpu::FilterEngine_GPU> filter;
+            int curBlurModel;
+            int curBlurKernelSize;
+            int curSrcType;
+
+            GpuMat highRes;
+
+            GpuMat diffTerm, regTerm;
+            GpuMat diff;
+            GpuMat a, b, c, d;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT BTV : public SuperResolution, private BTV_Base
+        class SUPER_RESOLUTION_NO_EXPORT BTV_L1_GPU : public SuperResolution, private BTV_L1_GPU_Base
         {
         public:
             AlgorithmInfo* info() const;
@@ -82,40 +92,27 @@ namespace cv
             static bool init();
             static Ptr<SuperResolution> create();
 
-            BTV();
+            BTV_L1_GPU();
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
             Mat processImpl(Ptr<IFrameSource>& frameSource);
 
         private:
-            void setMotionModel(int motionModel);
             void addNewFrame(const Mat& frame);
             void processFrame(int idx);
 
-            int motionModel;
-            int blurModel;
-            int blurKernelSize;
             int temporalAreaRadius;
 
-            Ptr<MotionEstimator> motionEstimator;
-            Mat m1, m2;
-
-            std::vector<Mat> frames;
-            std::vector<Mat> results;
+            vector<GpuMat> frames;
+            vector<GpuMat> results;
+            Mat h_dst;
 
             int storePos;
             int procPos;
             int outPos;
-
-            std::vector<float> blurWeights;
-            int curBlurModel;
-
-            Mat src_f;
-            std::vector<Mat> y;
-            std::vector<Mat> DHF;
         };
     }
 }
 
-#endif // __BTV_HPP__
+#endif // __TV_L1_GPU_HPP__

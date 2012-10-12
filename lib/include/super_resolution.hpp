@@ -29,7 +29,6 @@
 #define __SUPER_RESOLUTION_HPP__
 
 #include <opencv2/core/core.hpp>
-#include <opencv2/videostab/motion_core.hpp>
 #include <opencv2/videostab/frame_source.hpp>
 #include "super_resolution_export.h"
 
@@ -41,16 +40,6 @@ namespace cv
         using videostab::NullFrameSource;
         using videostab::VideoFileSource;
 
-        using cv::videostab::MotionModel;
-        using cv::videostab::MM_TRANSLATION;
-        using cv::videostab::MM_TRANSLATION_AND_SCALE;
-        using cv::videostab::MM_ROTATION;
-        using cv::videostab::MM_RIGID;
-        using cv::videostab::MM_SIMILARITY;
-        using cv::videostab::MM_AFFINE;
-        using cv::videostab::MM_HOMOGRAPHY;
-        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
-
         enum BlurModel
         {
             BLUR_BOX,
@@ -59,7 +48,7 @@ namespace cv
 
         enum SRMethod
         {
-            SR_BILATERAL_TOTAL_VARIATION,
+            SR_BTV_L1,
             SR_METHOD_MAX
         };
 
