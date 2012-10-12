@@ -57,8 +57,8 @@ namespace cv
             double tau;
             double alpha;
             int btvKernelSize;
-            int blurModel;
             int blurKernelSize;
+            double blurSigma;
 
         private:
             vector<float> btvWeights;
@@ -73,8 +73,8 @@ namespace cv
             vector<GpuMat> src_f;
 
             Ptr<gpu::FilterEngine_GPU> filter;
-            int curBlurModel;
             int curBlurKernelSize;
+            double curBlurSigma;
             int curSrcType;
 
             GpuMat highRes;

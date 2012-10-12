@@ -40,12 +40,6 @@ namespace cv
         using videostab::NullFrameSource;
         using videostab::VideoFileSource;
 
-        enum BlurModel
-        {
-            BLUR_BOX,
-            BLUR_GAUSS
-        };
-
         enum SRMethod
         {
             SR_BTV_L1,

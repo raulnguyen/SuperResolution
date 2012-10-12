@@ -42,26 +42,16 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     tau = 1.3;
     alpha = 0.7;
     btvKernelSize = 7;
-    blurModel = BLUR_GAUSS;
     blurKernelSize = 5;
+    blurSigma = 0.0;
 
-    curBlurModel = -1;
     curBlurKernelSize = -1;
+    curBlurSigma = -1.0;
     curSrcType = -1;
 }
 
 namespace
 {
-    Ptr<FilterEngine> createFilter(BlurModel model, int blurKernelSize, int srcType)
-    {
-        if (model == BLUR_GAUSS)
-            return createGaussianFilter(srcType, Size(blurKernelSize, blurKernelSize), 0);
-
-        CV_DbgAssert( model == BLUR_BOX );
-
-        return createBoxFilter(srcType, srcType, Size(blurKernelSize, blurKernelSize));
-    }
-
     void calcOpticalFlow(const Mat& frame0, const Mat& frame1, Mat_<Point2f>& flow, Mat& gray0, Mat& gray1)
     {
         CV_DbgAssert( frame0.depth() == CV_8U );
@@ -361,11 +351,11 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
 
     // update blur filter and btv weights
 
-    if (filter.empty() || blurModel != curBlurModel || blurKernelSize != curBlurKernelSize || src_f[0].type() != curSrcType)
+    if (filter.empty() || blurKernelSize != curBlurKernelSize || blurSigma != curBlurSigma || src_f[0].type() != curSrcType)
     {
-        filter = createFilter(static_cast<BlurModel>(blurModel), blurKernelSize, src_f[0].type());
-        curBlurModel = blurModel;
+        filter = createGaussianFilter(src_f[0].type(), Size(blurKernelSize, blurKernelSize), blurSigma);
         curBlurKernelSize = blurKernelSize;
+        curBlurSigma = blurSigma;
         curSrcType = src_f[0].type();
     }
 
@@ -442,10 +432,10 @@ namespace cv
                                                "Parameter of spacial distribution in btv.");
                           obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
                                                "Kernel size of btv filter.");
-                          obj.info()->addParam(obj, "blurModel", obj.blurModel, false, 0, 0,
-                                               "Blur model.");
                           obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
-                                               "Blur kernel size.");
+                                               "Gaussian blur kernel size.");
+                          obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0,
+                                               "Gaussian blur sigma.");
                           obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
                                                "Radius of the temporal search area."));
     }
