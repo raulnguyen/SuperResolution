@@ -25,12 +25,12 @@
 
 #pragma once
 
-#ifndef __TV_L1_HPP__
-#define __TV_L1_HPP__
+#ifndef __TV_L1_GPU_HPP__
+#define __TV_L1_GPU_HPP__
 
 #include <vector>
 #include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include "super_resolution.hpp"
 #include "super_resolution_export.h"
 
@@ -39,15 +39,17 @@ namespace cv
     namespace superres
     {
         using std::vector;
+        using std::pair;
+        using cv::gpu::GpuMat;
 
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
         // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
-        class SUPER_RESOLUTION_NO_EXPORT TV_L1_Base
+        class SUPER_RESOLUTION_NO_EXPORT TV_L1_GPU_Base
         {
         public:
-            TV_L1_Base();
+            TV_L1_GPU_Base();
 
-            void process(const vector<Mat>& src, Mat& dst, int startIdx, int procIdx, int endIdx);
+            void process(const vector<GpuMat>& src, GpuMat& dst, int startIdx, int procIdx, int endIdx);
 
             int scale;
             int iterations;
@@ -61,27 +63,28 @@ namespace cv
         private:
             vector<float> btvWeights;
 
-            Mat gray0, gray1;
+            GpuMat gray0, gray1;
+            gpu::FarnebackOpticalFlow opticalFlow;
 
-            vector<Mat_<Point2f> > lowResMotions;
-            vector<Mat_<Point2f> > highResMotions;
-            vector<Mat_<Point2f> > forward, backward;
+            vector<pair<GpuMat, GpuMat> > lowResMotions;
+            vector<pair<GpuMat, GpuMat> > highResMotions;
+            vector<pair<GpuMat, GpuMat> > forward, backward;
 
-            vector<Mat> src_f;
+            vector<GpuMat> src_f;
 
-            Ptr<FilterEngine> filter;
+            Ptr<gpu::FilterEngine_GPU> filter;
             int curBlurModel;
             int curBlurKernelSize;
             int curSrcType;
 
-            Mat highRes;
+            GpuMat highRes;
 
-            Mat diffTerm, regTerm;
-            Mat diff;
-            Mat a, b, c, d;
+            GpuMat diffTerm, regTerm;
+            GpuMat diff;
+            GpuMat a, b, c, d;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT TV_L1 : public SuperResolution, private TV_L1_Base
+        class SUPER_RESOLUTION_NO_EXPORT TV_L1_GPU : public SuperResolution, private TV_L1_GPU_Base
         {
         public:
             AlgorithmInfo* info() const;
@@ -89,7 +92,7 @@ namespace cv
             static bool init();
             static Ptr<SuperResolution> create();
 
-            TV_L1();
+            TV_L1_GPU();
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
@@ -101,8 +104,9 @@ namespace cv
 
             int temporalAreaRadius;
 
-            vector<Mat> frames;
-            vector<Mat> results;
+            vector<GpuMat> frames;
+            vector<GpuMat> results;
+            Mat h_dst;
 
             int storePos;
             int procPos;
@@ -111,4 +115,4 @@ namespace cv
     }
 }
 
-#endif // __TV_L1_HPP__
+#endif // __TV_L1_GPU_HPP__

@@ -27,6 +27,7 @@
 #include "btv.hpp"
 #include "btv_gpu.hpp"
 #include "tv-l1.hpp"
+#include "tv-l1_gpu.hpp"
 
 using namespace std;
 using namespace cv;
@@ -38,6 +39,9 @@ bool cv::superres::initModule_superres()
 
     all &= BTV::init();
     all &= BTV_GPU::init();
+
+    all &= TV_L1::init();
+    all &= TV_L1_GPU::init();
 
     return all;
 }
@@ -53,7 +57,7 @@ Ptr<SuperResolution> cv::superres::SuperResolution::create(SRMethod method, bool
     static const func_t gpu_funcs[] =
     {
         BTV_GPU::create,
-        0
+        TV_L1_GPU::create
     };
 
     CV_DbgAssert(method >= SR_BILATERAL_TOTAL_VARIATION && method < SR_METHOD_MAX);
