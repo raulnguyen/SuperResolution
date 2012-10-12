@@ -401,13 +401,13 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, int st
             add(diffTerm, a, diffTerm);
         }
 
-        addWeighted(highRes, 1.0, diffTerm, tau, 0.0, highRes);
-
         if (lambda > 0)
         {
             calcBtvRegularization(highRes, regTerm, btvKernelSize, btvWeights);
-            addWeighted(highRes, 1.0, regTerm, -tau * lambda, 0.0, highRes);
+            addWeighted(diffTerm, 1.0, regTerm, -lambda, 0.0, diffTerm);
         }
+
+        addWeighted(highRes, 1.0, diffTerm, tau, 0.0, highRes);
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
