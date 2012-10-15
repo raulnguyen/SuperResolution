@@ -24,9 +24,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "btv_l1.hpp"
-#include <opencv2/core/internal.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/video/tracking.hpp>
+#include "super_resolution.hpp"
 #include <opencv2/videostab/ring_buffer.hpp>
 
 using namespace std;
@@ -36,17 +34,20 @@ using namespace cv::superres;
 
 namespace
 {
-    void calcMotions(const vector<Mat_<Point2f> >& relMotions, vector<Mat_<Point2f> >& motions, int baseIdx, Size size)
+    void calcMotions(const vector<Mat>& relMotions, vector<Mat>& motions, int baseIdx, Size size)
     {
         CV_DbgAssert( baseIdx >= 0 && baseIdx <= relMotions.size() );
         #ifdef _DEBUG
         for (size_t i = 0; i < relMotions.size(); ++i)
+        {
             CV_DbgAssert( relMotions[i].size() == size );
+            CV_DbgAssert( relMotions[i].type() == CV_32FC2 );
+        }
         #endif
 
         motions.resize(relMotions.size() + 1);
 
-        motions[baseIdx].create(size);
+        motions[baseIdx].create(size, CV_32FC2);
         motions[baseIdx].setTo(Scalar::all(0));
 
         for (int i = baseIdx - 1; i >= 0; --i)
@@ -56,12 +57,15 @@ namespace
             subtract(motions[i - 1], relMotions[i - 1], motions[i]);
     }
 
-    void upscaleMotions(const vector<Mat_<Point2f> >& lowResMotions, vector<Mat_<Point2f> >& highResMotions, int scale)
+    void upscaleMotions(const vector<Mat>& lowResMotions, vector<Mat>& highResMotions, int scale)
     {
         CV_DbgAssert( !lowResMotions.empty() );
         #ifdef _DEBUG
-        for (size_t i = 1; i < lowResMotions.size(); ++i)
+        for (size_t i = 0; i < lowResMotions.size(); ++i)
+        {
             CV_DbgAssert( lowResMotions[i].size() == lowResMotions[0].size() );
+            CV_DbgAssert( lowResMotions[i].type() == CV_32FC2 );
+        }
         #endif
         CV_DbgAssert( scale > 1 );
 
@@ -74,16 +78,18 @@ namespace
         }
     }
 
-    void buildMotionMaps(const Mat_<Point2f>& motion, Mat_<Point2f>& forward, Mat_<Point2f>& backward)
+    void buildMotionMaps(const Mat& motion, Mat& forward, Mat& backward)
     {
-        forward.create(motion.size());
-        backward.create(motion.size());
+        CV_DbgAssert( motion.type() == CV_32FC2 );
+
+        forward.create(motion.size(), CV_32FC2);
+        backward.create(motion.size(), CV_32FC2);
 
         for (int y = 0; y < motion.rows; ++y)
         {
-            const Point2f* motionRow = motion[y];
-            Point2f* forwardRow = forward[y];
-            Point2f* backwardRow = backward[y];
+            const Point2f* motionRow = motion.ptr<Point2f>(y);
+            Point2f* forwardRow = forward.ptr<Point2f>(y);
+            Point2f* backwardRow = backward.ptr<Point2f>(y);
 
             for (int x = 0; x < motion.cols; ++x)
             {
@@ -288,8 +294,11 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     curSrcType = -1;
 }
 
-void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, const vector<Mat_<Point2f> >& relMotions, int baseIdx)
+void cv::superres::BTV_L1_Base::process(InputArrayOfArrays _src, OutputArray _dst, InputArrayOfArrays _motions, int baseIdx)
 {
+    _src.getMatVector(src);
+    _motions.getMatVector(motions);
+
     CV_DbgAssert( !src.empty() );
 #ifdef _DEBUG
     for (size_t i = 1; i < src.size(); ++i)
@@ -298,10 +307,10 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, const 
         CV_DbgAssert( src[i].type() == src[0].type() );
     }
 #endif
-    CV_DbgAssert( relMotions.size() == src.size() - 1 );
+    CV_DbgAssert( motions.size() == src.size() - 1 );
 #ifdef _DEBUG
-    for (size_t i = 1; i < relMotions.size(); ++i)
-        CV_DbgAssert( relMotions[i].size() == src[0].size() );
+    for (size_t i = 1; i < motions.size(); ++i)
+        CV_DbgAssert( motions[i].size() == src[0].size() );
 #endif
     CV_DbgAssert( baseIdx >= 0 && baseIdx < src.size() );
     CV_DbgAssert( scale > 1 );
@@ -328,7 +337,7 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, const 
 
     // calc motions between input frames
 
-    calcMotions(relMotions, lowResMotions, baseIdx, src[0].size());
+    calcMotions(motions, lowResMotions, baseIdx, src[0].size());
     upscaleMotions(lowResMotions, highResMotions, scale);
 
     forward.resize(highResMotions.size());
@@ -404,46 +413,7 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, Mat& dst, const 
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
-    highRes(inner).convertTo(dst, src[0].depth());
-}
-
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(BTV_L1, "SuperResolution.BTV_L1",
-                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0,
-                                               "Scale factor.");
-                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0,
-                                               "Iteration count.");
-                          obj.info()->addParam(obj, "tau", obj.tau, false, 0, 0,
-                                               "Asymptotic value of steepest descent method.");
-                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0,
-                                               "Weight parameter to balance data term and smoothness term.");
-                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0,
-                                               "Parameter of spacial distribution in btv.");
-                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0,
-                                               "Kernel size of btv filter.");
-                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0,
-                                               "Gaussian blur kernel size.");
-                          obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0,
-                                               "Gaussian blur sigma.");
-                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
-                                               "Radius of the temporal search area.");
-                          obj.info()->addParam<DenseOpticalFlow>(obj, "opticalFlow", obj.opticalFlow, false, 0, 0,
-                                               "Dense optical flow algorithm."));
-    }
-}
-
-bool cv::superres::BTV_L1::init()
-{
-    return !BTV_L1_info_auto.name().empty();
-}
-
-Ptr<SuperResolution> cv::superres::BTV_L1::create()
-{
-    Ptr<SuperResolution> alg(new BTV_L1);
-    return alg;
+    highRes(inner).convertTo(_dst, src[0].depth());
 }
 
 cv::superres::BTV_L1::BTV_L1()

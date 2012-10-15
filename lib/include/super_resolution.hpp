@@ -30,29 +30,23 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/videostab/frame_source.hpp>
+#include "optical_flow.hpp"
+#include "btv_l1.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
 {
     namespace superres
     {
+        SUPER_RESOLUTION_EXPORT bool initModule_superres();
+
         using videostab::IFrameSource;
         using videostab::NullFrameSource;
         using videostab::VideoFileSource;
 
-        enum SRMethod
-        {
-            SR_BTV_L1,
-            SR_METHOD_MAX
-        };
-
         class SUPER_RESOLUTION_EXPORT SuperResolution : public Algorithm, public IFrameSource
         {
         public:
-            static Ptr<SuperResolution> create(SRMethod method, bool useGpu = false);
-
-            virtual ~SuperResolution();
-
             void setFrameSource(const Ptr<IFrameSource>& frameSource);
 
             void reset();
@@ -69,7 +63,38 @@ namespace cv
             bool firstCall;
         };
 
-        SUPER_RESOLUTION_EXPORT bool initModule_superres();
+        class SUPER_RESOLUTION_EXPORT BTV_L1 : public SuperResolution, private BTV_L1_Base
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            BTV_L1();
+
+            int temporalAreaRadius;
+            Ptr<DenseOpticalFlow> opticalFlow;
+
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(Ptr<IFrameSource>& frameSource);
+
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
+
+            std::vector<Mat> frames;
+            std::vector<Mat> results;
+
+            std::vector<Mat_<Point2f> > motions;
+            Mat prevFrame;
+
+            int storePos;
+            int procPos;
+            int outPos;
+
+            std::vector<Mat> src;
+            std::vector<Mat_<Point2f> > relMotions;
+            Mat dst;
+        };
     }
 }
 

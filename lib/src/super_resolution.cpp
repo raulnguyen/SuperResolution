@@ -24,45 +24,89 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "super_resolution.hpp"
-#include "btv_l1.hpp"
-#include "btv_l1_gpu.hpp"
+#include <opencv2/core/internal.hpp>
 
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
 
+namespace cv
+{
+    namespace superres
+    {
+        CV_INIT_ALGORITHM(FarnebackOpticalFlow, "DenseOpticalFlow.Farneback",
+                          obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
+                          obj.info()->addParam(obj, "numLevels", obj.numLevels);
+                          obj.info()->addParam(obj, "winSize", obj.winSize);
+                          obj.info()->addParam(obj, "numIters", obj.numIters);
+                          obj.info()->addParam(obj, "polyN", obj.polyN);
+                          obj.info()->addParam(obj, "polySigma", obj.polySigma);
+                          obj.info()->addParam(obj, "flags", obj.flags));
+
+        CV_INIT_ALGORITHM(SimpleOpticalFlow, "DenseOpticalFlow.Simple",
+                          obj.info()->addParam(obj, "layers", obj.layers);
+                          obj.info()->addParam(obj, "averagingBlockSize", obj.averagingBlockSize);
+                          obj.info()->addParam(obj, "maxFlow", obj.maxFlow);
+                          obj.info()->addParam(obj, "sigmaDist", obj.sigmaDist);
+                          obj.info()->addParam(obj, "sigmaColor", obj.sigmaColor);
+                          obj.info()->addParam(obj, "postProcessWindow", obj.postProcessWindow);
+                          obj.info()->addParam(obj, "sigmaDistFix", obj.sigmaDistFix);
+                          obj.info()->addParam(obj, "sigmaColorFix", obj.sigmaColorFix);
+                          obj.info()->addParam(obj, "occThr", obj.occThr);
+                          obj.info()->addParam(obj, "upscaleAveragingRadius", obj.upscaleAveragingRadius);
+                          obj.info()->addParam(obj, "upscaleSigmaDist", obj.upscaleSigmaDist);
+                          obj.info()->addParam(obj, "upscaleSigmaColor", obj.upscaleSigmaColor);
+                          obj.info()->addParam(obj, "speedUpThr", obj.speedUpThr));
+
+        CV_INIT_ALGORITHM(BroxOpticalFlow_GPU, "DenseOpticalFlow.Brox_GPU",
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0, "Flow smoothness");
+                          obj.info()->addParam(obj, "gamma", obj.gamma, false, 0, 0, "Gradient constancy importance");
+                          obj.info()->addParam(obj, "scaleFactor", obj.scaleFactor, false, 0, 0, "Pyramid scale factor");
+                          obj.info()->addParam(obj, "innerIterations", obj.innerIterations, false, 0, 0, "Number of lagged non-linearity iterations (inner loop)");
+                          obj.info()->addParam(obj, "outerIterations", obj.outerIterations, false, 0, 0, "Number of warping iterations (number of pyramid levels)");
+                          obj.info()->addParam(obj, "solverIterations", obj.solverIterations, false, 0, 0, "Number of linear system solver iterations"));
+
+        CV_INIT_ALGORITHM(PyrLKOpticalFlow_GPU, "DenseOpticalFlow.PyrLK_GPU",
+                          obj.info()->addParam(obj, "winSize", obj.winSize);
+                          obj.info()->addParam(obj, "maxLevel", obj.maxLevel);
+                          obj.info()->addParam(obj, "iterations", obj.iterations));
+
+        CV_INIT_ALGORITHM(FarnebackOpticalFlow_GPU, "DenseOpticalFlow.Farneback_GPU",
+                          obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
+                          obj.info()->addParam(obj, "numLevels", obj.numLevels);
+                          obj.info()->addParam(obj, "winSize", obj.winSize);
+                          obj.info()->addParam(obj, "numIters", obj.numIters);
+                          obj.info()->addParam(obj, "polyN", obj.polyN);
+                          obj.info()->addParam(obj, "polySigma", obj.polySigma);
+                          obj.info()->addParam(obj, "flags", obj.flags));
+
+        CV_INIT_ALGORITHM(BTV_L1, "SuperResolution.BTV_L1",
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0, "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0, "Iteration count.");
+                          obj.info()->addParam(obj, "tau", obj.tau, false, 0, 0, "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0, "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0, "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0, "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0, "Gaussian blur kernel size.");
+                          obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0, "Gaussian blur sigma.");
+                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0, "Radius of the temporal search area.");
+                          obj.info()->addParam<DenseOpticalFlow>(obj, "opticalFlow", obj.opticalFlow, false, 0, 0, "Dense optical flow algorithm."));
+    }
+}
+
 bool cv::superres::initModule_superres()
 {
     bool all = true;
 
-    all &= BTV_L1::init();
-    all &= BTV_L1_GPU::init();
+    all &= !FarnebackOpticalFlow_info_auto.name().empty();
+    all &= !SimpleOpticalFlow_info_auto.name().empty();
+    all &= !BroxOpticalFlow_GPU_info_auto.name().empty();
+    all &= !PyrLKOpticalFlow_GPU_info_auto.name().empty();
+    all &= !FarnebackOpticalFlow_GPU_info_auto.name().empty();
+
+    all &= !BTV_L1_info_auto.name().empty();
 
     return all;
-}
-
-Ptr<SuperResolution> cv::superres::SuperResolution::create(SRMethod method, bool useGpu)
-{
-    typedef Ptr<SuperResolution> (*func_t)();
-    static const func_t cpu_funcs[] =
-    {
-        BTV_L1::create
-    };
-    static const func_t gpu_funcs[] =
-    {
-        BTV_L1_GPU::create
-    };
-
-    CV_DbgAssert( method >= SR_BTV_L1 && method < SR_METHOD_MAX );
-
-    const func_t func = (useGpu ? gpu_funcs : cpu_funcs)[method];
-    CV_Assert( func != 0 );
-
-    return func();
-}
-
-cv::superres::SuperResolution::~SuperResolution()
-{
 }
 
 cv::superres::SuperResolution::SuperResolution()

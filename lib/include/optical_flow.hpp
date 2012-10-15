@@ -131,8 +131,6 @@ namespace cv
             int iterations;
 
         private:
-            void call(const gpu::GpuMat& frame0, const gpu::GpuMat& frame1, gpu::GpuMat& u, gpu::GpuMat& v);
-
             gpu::PyrLKOpticalFlow alg;
             gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
             gpu::GpuMat u, v, flow;
@@ -156,8 +154,6 @@ namespace cv
             int flags;
 
         private:
-            void call(const gpu::GpuMat& frame0, const gpu::GpuMat& frame1, gpu::GpuMat& u, gpu::GpuMat& v);
-
             gpu::FarnebackOpticalFlow alg;
             gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
             gpu::GpuMat u, v, flow;

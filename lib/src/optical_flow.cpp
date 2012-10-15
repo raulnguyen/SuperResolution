@@ -25,7 +25,6 @@
 
 #include "optical_flow.hpp"
 #include <limits>
-#include <opencv2/core/internal.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -172,21 +171,6 @@ namespace
 ///////////////////////////////////////////////////////////////////
 // FarnebackOpticalFlow
 
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(FarnebackOpticalFlow, "DenseOpticalFlow.Farneback",
-                          obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
-                          obj.info()->addParam(obj, "numLevels", obj.numLevels);
-                          obj.info()->addParam(obj, "winSize", obj.winSize);
-                          obj.info()->addParam(obj, "numIters", obj.numIters);
-                          obj.info()->addParam(obj, "polyN", obj.polyN);
-                          obj.info()->addParam(obj, "polySigma", obj.polySigma);
-                          obj.info()->addParam(obj, "flags", obj.flags));
-    }
-}
-
 cv::superres::FarnebackOpticalFlow::FarnebackOpticalFlow()
 {
     pyrScale = 0.5;
@@ -224,27 +208,6 @@ void cv::superres::FarnebackOpticalFlow::calc(InputArray _frame0, InputArray _fr
 
 ///////////////////////////////////////////////////////////////////
 // SimpleOpticalFlow
-
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(SimpleOpticalFlow, "DenseOpticalFlow.Simple",
-                          obj.info()->addParam(obj, "layers", obj.layers);
-                          obj.info()->addParam(obj, "averagingBlockSize", obj.averagingBlockSize);
-                          obj.info()->addParam(obj, "maxFlow", obj.maxFlow);
-                          obj.info()->addParam(obj, "sigmaDist", obj.sigmaDist);
-                          obj.info()->addParam(obj, "sigmaColor", obj.sigmaColor);
-                          obj.info()->addParam(obj, "postProcessWindow", obj.postProcessWindow);
-                          obj.info()->addParam(obj, "sigmaDistFix", obj.sigmaDistFix);
-                          obj.info()->addParam(obj, "sigmaColorFix", obj.sigmaColorFix);
-                          obj.info()->addParam(obj, "occThr", obj.occThr);
-                          obj.info()->addParam(obj, "upscaleAveragingRadius", obj.upscaleAveragingRadius);
-                          obj.info()->addParam(obj, "upscaleSigmaDist", obj.upscaleSigmaDist);
-                          obj.info()->addParam(obj, "upscaleSigmaColor", obj.upscaleSigmaColor);
-                          obj.info()->addParam(obj, "speedUpThr", obj.speedUpThr));
-    }
-}
 
 cv::superres::SimpleOpticalFlow::SimpleOpticalFlow()
 {
@@ -303,20 +266,6 @@ void cv::superres::SimpleOpticalFlow::calc(InputArray _frame0, InputArray _frame
 ///////////////////////////////////////////////////////////////////
 // BroxOpticalFlow_GPU
 
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(BroxOpticalFlow_GPU, "DenseOpticalFlow.Brox_GPU",
-                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0, "Flow smoothness");
-                          obj.info()->addParam(obj, "gamma", obj.gamma, false, 0, 0, "Gradient constancy importance");
-                          obj.info()->addParam(obj, "scaleFactor", obj.scaleFactor, false, 0, 0, "Pyramid scale factor");
-                          obj.info()->addParam(obj, "innerIterations", obj.innerIterations, false, 0, 0, "Number of lagged non-linearity iterations (inner loop)");
-                          obj.info()->addParam(obj, "outerIterations", obj.outerIterations, false, 0, 0, "Number of warping iterations (number of pyramid levels)");
-                          obj.info()->addParam(obj, "solverIterations", obj.solverIterations, false, 0, 0, "Number of linear system solver iterations"));
-    }
-}
-
 cv::superres::BroxOpticalFlow_GPU::BroxOpticalFlow_GPU() : alg(0.197, 50.0, 0.8, 10, 77, 10)
 {
     alpha = alg.alpha;
@@ -362,17 +311,6 @@ void cv::superres::BroxOpticalFlow_GPU::calc(InputArray _frame0, InputArray _fra
 ///////////////////////////////////////////////////////////////////
 // PyrLKOpticalFlow_GPU
 
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(PyrLKOpticalFlow_GPU, "DenseOpticalFlow.PyrLK_GPU",
-                          obj.info()->addParam(obj, "winSize", obj.winSize);
-                          obj.info()->addParam(obj, "maxLevel", obj.maxLevel);
-                          obj.info()->addParam(obj, "iterations", obj.iterations));
-    }
-}
-
 cv::superres::PyrLKOpticalFlow_GPU::PyrLKOpticalFlow_GPU()
 {
     winSize = alg.winSize.width;
@@ -412,21 +350,6 @@ void cv::superres::PyrLKOpticalFlow_GPU::calc(InputArray _frame0, InputArray _fr
 
 ///////////////////////////////////////////////////////////////////
 // FarnebackOpticalFlow_GPU
-
-namespace cv
-{
-    namespace superres
-    {
-        CV_INIT_ALGORITHM(FarnebackOpticalFlow_GPU, "DenseOpticalFlow.Farneback_GPU",
-                          obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
-                          obj.info()->addParam(obj, "numLevels", obj.numLevels);
-                          obj.info()->addParam(obj, "winSize", obj.winSize);
-                          obj.info()->addParam(obj, "numIters", obj.numIters);
-                          obj.info()->addParam(obj, "polyN", obj.polyN);
-                          obj.info()->addParam(obj, "polySigma", obj.polySigma);
-                          obj.info()->addParam(obj, "flags", obj.flags));
-    }
-}
 
 cv::superres::FarnebackOpticalFlow_GPU::FarnebackOpticalFlow_GPU()
 {
