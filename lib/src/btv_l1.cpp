@@ -449,7 +449,7 @@ Ptr<SuperResolution> cv::superres::BTV_L1::create()
 cv::superres::BTV_L1::BTV_L1()
 {
     temporalAreaRadius = 4;
-    opticalFlow = new Farneback;
+    opticalFlow = new FarnebackOpticalFlow;
 }
 
 void cv::superres::BTV_L1::initImpl(Ptr<IFrameSource>& frameSource)

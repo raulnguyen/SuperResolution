@@ -28,7 +28,9 @@
 #ifndef __OPTICAL_FLOW_HPP__
 #define __OPTICAL_FLOW_HPP__
 
+#include <vector>
 #include <opencv2/core/core.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include "super_resolution_export.h"
 
 namespace cv
@@ -38,17 +40,17 @@ namespace cv
         class SUPER_RESOLUTION_NO_EXPORT DenseOpticalFlow : public Algorithm
         {
         public:
-            virtual void calc(InputArray frame0, InputArray frame1, OutputArray flow) = 0;
+            virtual void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2 = noArray()) = 0;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT Farneback : public DenseOpticalFlow
+        class SUPER_RESOLUTION_NO_EXPORT FarnebackOpticalFlow : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            Farneback();
+            FarnebackOpticalFlow();
 
-            void calc(InputArray frame0, InputArray frame1, OutputArray flow);
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
 
             double pyrScale;
             int numLevels;
@@ -59,17 +61,19 @@ namespace cv
             int flags;
 
         private:
-            Mat buf0, buf1;
+            Mat buf0, buf1, buf2, buf3, buf4, buf5;
+            Mat flow;
+            std::vector<Mat> flows;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT SimpleFlow : public DenseOpticalFlow
+        class SUPER_RESOLUTION_NO_EXPORT SimpleOpticalFlow : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            SimpleFlow();
+            SimpleOpticalFlow();
 
-            void calc(InputArray frame0, InputArray frame1, OutputArray flow);
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
 
             int layers;
             int averagingBlockSize;
@@ -86,7 +90,77 @@ namespace cv
             double speedUpThr;
 
         private:
-            Mat buf0, buf1;
+            Mat buf0, buf1, buf2, buf3, buf4, buf5;
+            Mat flow;
+            std::vector<Mat> flows;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT BroxOpticalFlow_GPU : public DenseOpticalFlow
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            BroxOpticalFlow_GPU();
+
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+
+            double alpha;
+            double gamma;
+            double scaleFactor;
+            int innerIterations;
+            int outerIterations;
+            int solverIterations;
+
+        private:
+            gpu::BroxOpticalFlow alg;
+            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat u, v, flow;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT PyrLKOpticalFlow_GPU : public DenseOpticalFlow
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            PyrLKOpticalFlow_GPU();
+
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+
+            int winSize;
+            int maxLevel;
+            int iterations;
+
+        private:
+            void call(const gpu::GpuMat& frame0, const gpu::GpuMat& frame1, gpu::GpuMat& u, gpu::GpuMat& v);
+
+            gpu::PyrLKOpticalFlow alg;
+            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat u, v, flow;
+        };
+
+        class SUPER_RESOLUTION_NO_EXPORT FarnebackOpticalFlow_GPU : public DenseOpticalFlow
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            FarnebackOpticalFlow_GPU();
+
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+
+            double pyrScale;
+            int numLevels;
+            int winSize;
+            int numIters;
+            int polyN;
+            double polySigma;
+            int flags;
+
+        private:
+            void call(const gpu::GpuMat& frame0, const gpu::GpuMat& frame1, gpu::GpuMat& u, gpu::GpuMat& v);
+
+            gpu::FarnebackOpticalFlow alg;
+            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat u, v, flow;
         };
     }
 }
