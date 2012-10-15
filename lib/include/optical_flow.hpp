@@ -25,8 +25,8 @@
 
 #pragma once
 
-#ifndef __OPTICAL_FLOW_HPP__
-#define __OPTICAL_FLOW_HPP__
+#ifndef __SR_OPTICAL_FLOW_HPP__
+#define __SR_OPTICAL_FLOW_HPP__
 
 #include <vector>
 #include <opencv2/core/core.hpp>
@@ -37,13 +37,13 @@ namespace cv
 {
     namespace superres
     {
-        class SUPER_RESOLUTION_NO_EXPORT DenseOpticalFlow : public Algorithm
+        class SUPER_RESOLUTION_EXPORT DenseOpticalFlow : public Algorithm
         {
         public:
             virtual void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2 = noArray()) = 0;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT FarnebackOpticalFlow : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT FarnebackOpticalFlow : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
@@ -66,7 +66,7 @@ namespace cv
             std::vector<Mat> flows;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT SimpleOpticalFlow : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT SimpleOpticalFlow : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
@@ -95,7 +95,7 @@ namespace cv
             std::vector<Mat> flows;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT BroxOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT BroxOpticalFlow_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
@@ -117,7 +117,7 @@ namespace cv
             gpu::GpuMat u, v, flow;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT PyrLKOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT PyrLKOpticalFlow_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
@@ -138,7 +138,7 @@ namespace cv
             gpu::GpuMat u, v, flow;
         };
 
-        class SUPER_RESOLUTION_NO_EXPORT FarnebackOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT FarnebackOpticalFlow_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
@@ -165,4 +165,4 @@ namespace cv
     }
 }
 
-#endif // __OPTICAL_FLOW_HPP__
+#endif // __SR_OPTICAL_FLOW_HPP__
