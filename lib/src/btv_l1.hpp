@@ -32,6 +32,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "super_resolution.hpp"
+#include "optical_flow.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
@@ -51,8 +52,8 @@ namespace cv
 
             int scale;
             int iterations;
-            double lambda;
             double tau;
+            double lambda;
             double alpha;
             int btvKernelSize;
             int blurKernelSize;
@@ -91,6 +92,9 @@ namespace cv
 
             BTV_L1();
 
+            int temporalAreaRadius;
+            Ptr<DenseOpticalFlow> opticalFlow;
+
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
             Mat processImpl(Ptr<IFrameSource>& frameSource);
@@ -99,12 +103,9 @@ namespace cv
             void addNewFrame(const Mat& frame);
             void processFrame(int idx);
 
-            int temporalAreaRadius;
-
             vector<Mat> frames;
             vector<Mat> results;
 
-            Mat gray0, gray1;
             vector<Mat_<Point2f> > motions;
             Mat prevFrame;
 

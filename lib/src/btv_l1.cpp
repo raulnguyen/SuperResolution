@@ -36,46 +36,6 @@ using namespace cv::superres;
 
 namespace
 {
-    void calcOpticalFlow(const Mat& frame0, const Mat& frame1, Mat_<Point2f>& flow, Mat& gray0, Mat& gray1)
-    {
-        CV_DbgAssert( frame0.depth() == CV_8U );
-        CV_DbgAssert( frame0.channels() == 1 || frame0.channels() == 3 || frame0.channels() == 4 );
-        CV_DbgAssert( frame1.type() == frame0.type() );
-        CV_DbgAssert( frame1.size() == frame0.size() );
-
-        const Mat* input0;
-        const Mat* input1;
-
-        if (frame0.channels() == 1)
-        {
-            input0 = &frame0;
-            input1 = &frame1;
-        }
-        else if (frame0.channels() == 3)
-        {
-            cvtColor(frame0, gray0, COLOR_BGR2GRAY);
-            cvtColor(frame1, gray1, COLOR_BGR2GRAY);
-            input0 = &gray0;
-            input1 = &gray1;
-        }
-        else
-        {
-            cvtColor(frame0, gray0, COLOR_BGRA2GRAY);
-            cvtColor(frame1, gray1, COLOR_BGRA2GRAY);
-            input0 = &gray0;
-            input1 = &gray1;
-        }
-
-        calcOpticalFlowFarneback(*input0, *input1, flow,
-                                 /*pyrScale =*/ 0.5,
-                                 /*numLevels =*/ 5,
-                                 /*winSize =*/ 13,
-                                 /*numIters =*/ 10,
-                                 /*polyN =*/ 5,
-                                 /*polySigma =*/ 1.1,
-                                 /*flags =*/ 0);
-    }
-
     void calcMotions(const vector<Mat_<Point2f> >& relMotions, vector<Mat_<Point2f> >& motions, int baseIdx, Size size)
     {
         CV_DbgAssert( baseIdx >= 0 && baseIdx <= relMotions.size() );
@@ -469,7 +429,9 @@ namespace cv
                           obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0,
                                                "Gaussian blur sigma.");
                           obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0,
-                                               "Radius of the temporal search area."));
+                                               "Radius of the temporal search area.");
+                          obj.info()->addParam<DenseOpticalFlow>(obj, "opticalFlow", obj.opticalFlow, false, 0, 0,
+                                               "Dense optical flow algorithm."));
     }
 }
 
@@ -487,6 +449,7 @@ Ptr<SuperResolution> cv::superres::BTV_L1::create()
 cv::superres::BTV_L1::BTV_L1()
 {
     temporalAreaRadius = 4;
+    opticalFlow = new Farneback;
 }
 
 void cv::superres::BTV_L1::initImpl(Ptr<IFrameSource>& frameSource)
@@ -545,7 +508,7 @@ void cv::superres::BTV_L1::addNewFrame(const Mat& frame)
     frame.convertTo(at(storePos, frames), CV_32F);
 
     if (storePos > 0)
-        calcOpticalFlow(prevFrame, frame, at(storePos - 1, motions), gray0, gray1);
+        opticalFlow->calc(prevFrame, frame, at(storePos - 1, motions));
 
     frame.copyTo(prevFrame);
 }
