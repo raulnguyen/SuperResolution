@@ -72,14 +72,14 @@ namespace
 
         for (int i = baseIdx - 1; i >= 0; --i)
         {
-            add(relMotions[i + 1].first, forwardMotions[i].first, relMotions[i].first);
-            add(relMotions[i + 1].second, forwardMotions[i].second, relMotions[i].second);
+            gpu::add(relMotions[i + 1].first, forwardMotions[i].first, relMotions[i].first);
+            gpu::add(relMotions[i + 1].second, forwardMotions[i].second, relMotions[i].second);
         }
 
         for (size_t i = baseIdx + 1; i < relMotions.size(); ++i)
         {
-            subtract(relMotions[i - 1].first, forwardMotions[i - 1].first, relMotions[i].first);
-            subtract(relMotions[i - 1].second, forwardMotions[i - 1].second, relMotions[i].second);
+            gpu::subtract(relMotions[i - 1].first, forwardMotions[i - 1].first, relMotions[i].first);
+            gpu::subtract(relMotions[i - 1].second, forwardMotions[i - 1].second, relMotions[i].second);
         }
     }
 
@@ -101,11 +101,11 @@ namespace
 
         for (size_t i = 0; i < lowResMotions.size(); ++i)
         {
-            resize(lowResMotions[i].first, highResMotions[i].first, Size(), scale, scale, INTER_CUBIC);
-            resize(lowResMotions[i].second, highResMotions[i].second, Size(), scale, scale, INTER_CUBIC);
+            gpu::resize(lowResMotions[i].first, highResMotions[i].first, Size(), scale, scale, INTER_CUBIC);
+            gpu::resize(lowResMotions[i].second, highResMotions[i].second, Size(), scale, scale, INTER_CUBIC);
 
-            multiply(highResMotions[i].first, Scalar::all(scale), highResMotions[i].first);
-            multiply(highResMotions[i].second, Scalar::all(scale), highResMotions[i].second);
+            gpu::multiply(highResMotions[i].first, Scalar::all(scale), highResMotions[i].first);
+            gpu::multiply(highResMotions[i].second, Scalar::all(scale), highResMotions[i].second);
         }
     }
 
@@ -340,16 +340,11 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
     const Size lowResSize = y[0].size();
     const Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
-    resize(y[baseIdx], highRes, highResSize, 0, 0, INTER_CUBIC);
+    gpu::resize(y[baseIdx], highRes, highResSize, 0, 0, INTER_CUBIC);
 
     // iterations
 
     diffTerm.create(highResSize, highRes.type());
-    a.create(highResSize, highRes.type());
-    b.create(highResSize, highRes.type());
-    c.create(lowResSize, highRes.type());
-    diff.create(lowResSize, highRes.type());
-    d.create(highResSize, highRes.type());
 
     for (int i = 0; i < iterations; ++i)
     {
@@ -358,11 +353,11 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
         for (size_t k = 0; k < y.size(); ++k)
         {
             // a = M * Ih
-            remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST);
+            gpu::remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST);
             // b = HM * Ih
             filter->apply(a, b);
             // c = DHF * Ih
-            resize(b, c, lowResSize, 0, 0, INTER_NEAREST);
+            gpu::resize(b, c, lowResSize, 0, 0, INTER_NEAREST);
 
             diffSign(y[k], c, diff);
 
@@ -371,7 +366,7 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
             // b = HtDt * diff
             filter->apply(d, b);
             // a = MtHtDt * diff
-            remap(b, a, forward[k].first, forward[k].second, INTER_NEAREST);
+            gpu::remap(b, a, forward[k].first, forward[k].second, INTER_NEAREST);
 
             add(diffTerm, a, diffTerm);
         }
@@ -379,10 +374,10 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
         if (lambda > 0)
         {
             calcBtvRegularization(highRes, regTerm, btvKernelSize);
-            addWeighted(diffTerm, 1.0, regTerm, -lambda, 0.0, diffTerm);
+            gpu::addWeighted(diffTerm, 1.0, regTerm, -lambda, 0.0, diffTerm);
         }
 
-        addWeighted(highRes, 1.0, diffTerm, tau, 0.0, highRes);
+        gpu::addWeighted(highRes, 1.0, diffTerm, tau, 0.0, highRes);
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
