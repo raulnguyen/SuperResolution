@@ -86,22 +86,23 @@ namespace
 namespace btv_l1_device
 {
     template <int cn>
-    void upscale(const PtrStepSzb src, PtrStepSzb dst, int scale)
+    void upscale(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream)
     {
         typedef typename TypeVec<float, cn>::vec_type src_t;
 
         const dim3 block(32, 8);
         const dim3 grid(divUp(src.cols, block.x), divUp(src.rows, block.y));
 
-        ::upscale<src_t><<<grid, block>>>((PtrStepSz<src_t>) src, (PtrStepSz<src_t>) dst, scale);
+        ::upscale<src_t><<<grid, block, 0, stream>>>((PtrStepSz<src_t>) src, (PtrStepSz<src_t>) dst, scale);
         cudaSafeCall( cudaGetLastError() );
 
-        cudaSafeCall( cudaDeviceSynchronize() );
+        if (stream == 0)
+            cudaSafeCall( cudaDeviceSynchronize() );
     }
 
-    template void upscale<1>(const PtrStepSzb src, PtrStepSzb dst, int scale);
-    template void upscale<3>(const PtrStepSzb src, PtrStepSzb dst, int scale);
-    template void upscale<4>(const PtrStepSzb src, PtrStepSzb dst, int scale);
+    template void upscale<1>(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream);
+    template void upscale<3>(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream);
+    template void upscale<4>(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream);
 }
 
 namespace
@@ -148,9 +149,9 @@ namespace cv { namespace gpu { namespace device
 
 namespace btv_l1_device
 {
-    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst)
+    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst, cudaStream_t stream)
     {
-        transform(src1, src2, dst, DiffSign(), WithOutMask(), 0);
+        transform(src1, src2, dst, DiffSign(), WithOutMask(), stream);
     }
 }
 

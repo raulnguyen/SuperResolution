@@ -25,6 +25,7 @@
 
 #include "super_resolution.hpp"
 #include <opencv2/videostab/ring_buffer.hpp>
+#include <opencv2/gpu/stream_accessor.hpp>
 
 using namespace std;
 using namespace cv;
@@ -39,9 +40,9 @@ namespace btv_l1_device
                          PtrStepSzf backwardx, PtrStepSzf backwardy);
 
     template <int cn>
-    void upscale(const PtrStepSzb src, PtrStepSzb dst, int scale);
+    void upscale(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream);
 
-    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst);
+    void diffSign(PtrStepSzf src1, PtrStepSzf src2, PtrStepSzf dst, cudaStream_t stream);
 
     void loadBtvWeights(const float* weights, size_t count);
     template <int cn> void calcBtvRegularization(PtrStepSzb src, PtrStepSzb dst, int ksize);
@@ -124,9 +125,9 @@ namespace
         btv_l1_device::buildMotionMaps(motion.first, motion.second, forwardMap.first, forwardMap.second, backwardMap.first, backwardMap.second);
     }
 
-    void upscale(const GpuMat& src, GpuMat& dst, int scale)
+    void upscale(const GpuMat& src, GpuMat& dst, int scale, Stream& stream)
     {
-        typedef void (*func_t)(const PtrStepSzb src, PtrStepSzb dst, int scale);
+        typedef void (*func_t)(const PtrStepSzb src, PtrStepSzb dst, int scale, cudaStream_t stream);
         static const func_t funcs[] =
         {
             0, btv_l1_device::upscale<1>, 0, btv_l1_device::upscale<3>, btv_l1_device::upscale<4>
@@ -141,10 +142,10 @@ namespace
 
         const func_t func = funcs[src.channels()];
 
-        func(src, dst, scale);
+        func(src, dst, scale, StreamAccessor::getStream(stream));
     }
 
-    void diffSign(const GpuMat& src1, const GpuMat& src2, GpuMat& dst)
+    void diffSign(const GpuMat& src1, const GpuMat& src2, GpuMat& dst, Stream& stream)
     {
         CV_DbgAssert( src1.depth() == CV_32F );
         CV_DbgAssert( src1.type() == src2.type() );
@@ -152,7 +153,7 @@ namespace
 
         dst.create(src1.size(), src1.type());
 
-        btv_l1_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1));
+        btv_l1_device::diffSign(src1.reshape(1), src2.reshape(1), dst.reshape(1), StreamAccessor::getStream(stream));
     }
 
     void calcBtvWeights(int btvKernelSize, double alpha, vector<float>& btvWeights)
@@ -344,40 +345,41 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
 
     // iterations
 
-    diffTerm.create(highResSize, highRes.type());
+    diffTerms.resize(src.size());
+    streams.resize(src.size());
 
     for (int i = 0; i < iterations; ++i)
     {
-        diffTerm.setTo(Scalar::all(0));
-
         for (size_t k = 0; k < y.size(); ++k)
         {
             // a = M * Ih
-            gpu::remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST);
+            gpu::remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
             // b = HM * Ih
-            filter->apply(a, b);
+            filter->apply(a, b, Rect(0,0,-1,-1), streams[k]);
             // c = DHF * Ih
-            gpu::resize(b, c, lowResSize, 0, 0, INTER_NEAREST);
+            gpu::resize(b, c, lowResSize, 0, 0, INTER_NEAREST, streams[k]);
 
-            diffSign(y[k], c, diff);
+            diffSign(y[k], c, diff, streams[k]);
 
             // d = Dt * diff
-            upscale(diff, d, scale);
+            upscale(diff, d, scale, streams[k]);
             // b = HtDt * diff
-            filter->apply(d, b);
+            filter->apply(d, b, Rect(0,0,-1,-1), streams[k]);
             // a = MtHtDt * diff
-            gpu::remap(b, a, forward[k].first, forward[k].second, INTER_NEAREST);
-
-            add(diffTerm, a, diffTerm);
+            gpu::remap(b, diffTerms[k], forward[k].first, forward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
         }
+
+        for (size_t k = 0; k < y.size(); ++k)
+            streams[k].waitForCompletion();
 
         if (lambda > 0)
         {
             calcBtvRegularization(highRes, regTerm, btvKernelSize);
-            gpu::addWeighted(diffTerm, 1.0, regTerm, -lambda, 0.0, diffTerm);
+            gpu::addWeighted(highRes, 1.0, regTerm, -tau * lambda, 0.0, highRes);
         }
 
-        gpu::addWeighted(highRes, 1.0, diffTerm, tau, 0.0, highRes);
+        for (size_t k = 0; k < y.size(); ++k)
+            gpu::addWeighted(highRes, 1.0, diffTerms[k], tau, 0.0, highRes);
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);

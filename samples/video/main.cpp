@@ -80,27 +80,20 @@ int main(int argc, const char* argv[])
 
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName));
-    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> frameSource(new VideoFileSource(inputVideoName));
 
     // skip first frame, it is usually corrupted
     {
-        superResSource->nextFrame();
-        Mat frame = bicubicSource->nextFrame();
+        Mat frame = frameSource->nextFrame();
         cout << "Input size : " << frame.cols << 'x' << frame.rows << endl;
         cout << "Scale factor : " << scale << endl;
         cout << "Mode : " << (useGpu ? "GPU" : "CPU") << endl;
     }
 
-    superRes->setFrameSource(superResSource);
+    superRes->setFrameSource(frameSource);
 
     for (int i = 0;; ++i)
     {
-        Mat frame = bicubicSource->nextFrame();
-
-        if (frame.empty())
-            break;
-
         cout << '[' << setw(3) << i << "] : ";
 
         Mat result;
@@ -109,12 +102,7 @@ int main(int argc, const char* argv[])
         if (result.empty())
             break;
 
-        Mat bicubic;
-        resize(frame, bicubic, Size(), scale, scale, INTER_CUBIC);
-
-        imshow("Input", frame);
         imshow("Super Resolution", result);
-        imshow("BiCubic", bicubic);
 
         if (waitKey(30) > 0)
             break;
