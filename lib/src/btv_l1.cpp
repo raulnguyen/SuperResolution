@@ -23,7 +23,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "btv_l1.hpp"
 #include "super_resolution.hpp"
 #include <opencv2/videostab/ring_buffer.hpp>
 
@@ -34,27 +33,27 @@ using namespace cv::superres;
 
 namespace
 {
-    void calcMotions(const vector<Mat>& relMotions, vector<Mat>& motions, int baseIdx, Size size)
+    void calcRelativeMotions(const vector<Mat>& forwardMotions, vector<Mat>& relMotions, int baseIdx, Size size)
     {
-        CV_DbgAssert( baseIdx >= 0 && baseIdx <= relMotions.size() );
+        CV_DbgAssert( baseIdx >= 0 && baseIdx <= forwardMotions.size() );
         #ifdef _DEBUG
-        for (size_t i = 0; i < relMotions.size(); ++i)
+        for (size_t i = 0; i < forwardMotions.size(); ++i)
         {
-            CV_DbgAssert( relMotions[i].size() == size );
-            CV_DbgAssert( relMotions[i].type() == CV_32FC2 );
+            CV_DbgAssert( forwardMotions[i].size() == size );
+            CV_DbgAssert( forwardMotions[i].type() == CV_32FC2 );
         }
         #endif
 
-        motions.resize(relMotions.size() + 1);
+        relMotions.resize(forwardMotions.size() + 1);
 
-        motions[baseIdx].create(size, CV_32FC2);
-        motions[baseIdx].setTo(Scalar::all(0));
+        relMotions[baseIdx].create(size, CV_32FC2);
+        relMotions[baseIdx].setTo(Scalar::all(0));
 
         for (int i = baseIdx - 1; i >= 0; --i)
-            add(motions[i + 1], relMotions[i], motions[i]);
+            add(relMotions[i + 1], forwardMotions[i], relMotions[i]);
 
-        for (size_t i = baseIdx + 1; i < motions.size(); ++i)
-            subtract(motions[i - 1], relMotions[i - 1], motions[i]);
+        for (size_t i = baseIdx + 1; i < relMotions.size(); ++i)
+            subtract(relMotions[i - 1], forwardMotions[i - 1], relMotions[i]);
     }
 
     void upscaleMotions(const vector<Mat>& lowResMotions, vector<Mat>& highResMotions, int scale)
@@ -73,23 +72,23 @@ namespace
 
         for (size_t i = 0; i < lowResMotions.size(); ++i)
         {
-            resize(lowResMotions[i], highResMotions[i], Size(), scale, scale, INTER_LINEAR);
+            resize(lowResMotions[i], highResMotions[i], Size(), scale, scale, INTER_CUBIC);
             multiply(highResMotions[i], Scalar::all(scale), highResMotions[i]);
         }
     }
 
-    void buildMotionMaps(const Mat& motion, Mat& forward, Mat& backward)
+    void buildMotionMaps(const Mat& motion, Mat& forwardMap, Mat& backwardMap)
     {
         CV_DbgAssert( motion.type() == CV_32FC2 );
 
-        forward.create(motion.size(), motion.type());
-        backward.create(motion.size(), motion.type());
+        forwardMap.create(motion.size(), CV_32FC2);
+        backwardMap.create(motion.size(), CV_32FC2);
 
         for (int y = 0; y < motion.rows; ++y)
         {
             const Point2f* motionRow = motion.ptr<Point2f>(y);
-            Point2f* forwardRow = forward.ptr<Point2f>(y);
-            Point2f* backwardRow = backward.ptr<Point2f>(y);
+            Point2f* forwardRow = forwardMap.ptr<Point2f>(y);
+            Point2f* backwardRow = backwardMap.ptr<Point2f>(y);
 
             for (int x = 0; x < motion.cols; ++x)
             {
@@ -219,17 +218,17 @@ namespace
             {
                 const T srcVal = srcRow[j];
 
-                for (int m = 0, count = 0; m <= ksize; ++m)
+                for (int m = 0, ind = 0; m <= ksize; ++m)
                 {
                     const T* srcRow2 = src.ptr<T>(i - m);
                     const T* srcRow3 = src.ptr<T>(i + m);
 
-                    for (int l = ksize; l + m >= 0; --l, ++count)
+                    for (int l = ksize; l + m >= 0; --l, ++ind)
                     {
                         CV_DbgAssert( j + l >= 0 && j + l < src.cols );
                         CV_DbgAssert( j - l >= 0 && j - l < src.cols );
 
-                        dstRow[j] += btvWeights[count] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
+                        dstRow[j] += btvWeights[ind] * (diffSign(srcVal, srcRow3[j + l]) - diffSign(srcRow2[j - l], srcVal));
                     }
                 }
             }
@@ -285,6 +284,7 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     btvKernelSize = 7;
     blurKernelSize = 5;
     blurSigma = 0.0;
+    opticalFlow = new FarnebackOpticalFlow;
 
     curBtvKernelSize = -1;
     curAlpha = -1.0;
@@ -294,7 +294,7 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     curSrcType = -1;
 }
 
-void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst, const vector<Mat>& motions, int baseIdx)
+void cv::superres::BTV_L1_Base::process(const std::vector<Mat>& src, OutputArray dst, int baseIdx)
 {
     CV_DbgAssert( !src.empty() );
 #ifdef _DEBUG
@@ -304,12 +304,58 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst,
         CV_DbgAssert( src[i].type() == src[0].type() );
     }
 #endif
-    CV_DbgAssert( motions.size() == src.size() - 1 );
+    CV_DbgAssert( baseIdx >= 0 && baseIdx < src.size() );
+
+    // calc motions between input frames
+
+    lowResMotions.resize(src.size());
+    for (size_t i = 0; i < src.size(); ++i)
+    {
+        if (i != baseIdx)
+            opticalFlow->calc(src[i], src[baseIdx], lowResMotions[i]);
+        else
+        {
+            lowResMotions[i].create(src[i].size(), CV_32FC2);
+            lowResMotions[i].setTo(Scalar::all(0));
+        }
+    }
+
+    // run
+
+    run(src, dst, lowResMotions, baseIdx);
+}
+
+void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst, const vector<Mat>& forwardMotions, int baseIdx)
+{
+    CV_DbgAssert( !src.empty() );
 #ifdef _DEBUG
-    for (size_t i = 1; i < motions.size(); ++i)
-        CV_DbgAssert( motions[i].size() == src[0].size() );
+    for (size_t i = 1; i < src.size(); ++i)
+    {
+        CV_DbgAssert( src[i].size() == src[0].size() );
+        CV_DbgAssert( src[i].type() == src[0].type() );
+    }
+#endif
+    CV_DbgAssert( forwardMotions.size() == src.size() - 1 );
+#ifdef _DEBUG
+    for (size_t i = 1; i < forwardMotions.size(); ++i)
+    {
+        CV_DbgAssert( forwardMotions[i].size() == src[0].size() );
+        CV_DbgAssert( forwardMotions[i].type() == CV_32FC2 );
+    }
 #endif
     CV_DbgAssert( baseIdx >= 0 && baseIdx < src.size() );
+
+    // calc motions between input frames
+
+    calcRelativeMotions(forwardMotions, lowResMotions, baseIdx, src[0].size());
+
+    // run
+
+    run(src, dst, lowResMotions, baseIdx);
+}
+
+void cv::superres::BTV_L1_Base::run(const vector<Mat>& src, OutputArray dst, const vector<Mat>& relativeMotions, int baseIdx)
+{
     CV_DbgAssert( scale > 1 );
     CV_DbgAssert( iterations > 0 );
     CV_DbgAssert( tau > 0.0 );
@@ -332,10 +378,9 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst,
     }
     const vector<Mat>& y = *yPtr;
 
-    // calc motions between input frames
+    // calc high res motions
 
-    calcMotions(motions, lowResMotions, baseIdx, src[0].size());
-    upscaleMotions(lowResMotions, highResMotions, scale);
+    upscaleMotions(relativeMotions, highResMotions, scale);
 
     forward.resize(highResMotions.size());
     backward.resize(highResMotions.size());
@@ -413,10 +458,11 @@ void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst,
     highRes(inner).convertTo(dst, src[0].depth());
 }
 
+////////////////////////////////////////////////////////////////////
+
 cv::superres::BTV_L1::BTV_L1()
 {
     temporalAreaRadius = 4;
-    opticalFlow = new FarnebackOpticalFlow;
 }
 
 void cv::superres::BTV_L1::initImpl(Ptr<IFrameSource>& frameSource)

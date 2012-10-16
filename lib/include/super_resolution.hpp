@@ -29,10 +29,10 @@
 #define __SUPER_RESOLUTION_HPP__
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include <opencv2/videostab/frame_source.hpp>
 #include "optical_flow.hpp"
-#include "btv_l1.hpp"
-#include "btv_l1_gpu.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
@@ -40,6 +40,104 @@ namespace cv
     namespace superres
     {
         SUPER_RESOLUTION_EXPORT bool initModule_superres();
+
+        // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
+        // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
+        class SUPER_RESOLUTION_EXPORT BTV_L1_Base
+        {
+        public:
+            BTV_L1_Base();
+
+            void process(const std::vector<Mat>& src, OutputArray dst, int baseIdx = 0);
+            void process(const std::vector<Mat>& src, OutputArray dst, const std::vector<Mat>& forwardMotions, int baseIdx = 0);
+
+            int scale;
+            int iterations;
+            double tau;
+            double lambda;
+            double alpha;
+            int btvKernelSize;
+            int blurKernelSize;
+            double blurSigma;
+            Ptr<DenseOpticalFlow> opticalFlow;
+
+        protected:
+            void run(const std::vector<Mat>& src, OutputArray dst, const std::vector<Mat>& relativeMotions, int baseIdx);
+
+        private:
+            std::vector<Mat> src_f;
+
+            std::vector<float> btvWeights;
+            int curBtvKernelSize;
+            double curAlpha;
+
+            std::vector<Mat> lowResMotions;
+            std::vector<Mat> highResMotions;
+            std::vector<Mat> forward;
+            std::vector<Mat> backward;
+
+            Ptr<FilterEngine> filter;
+            int curBlurKernelSize;
+            double curBlurSigma;
+            int curSrcType;
+
+            Mat highRes;
+
+            Mat diffTerm, regTerm;
+            Mat diff;
+            Mat a, b, c, d;
+        };
+
+        // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
+        // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
+        class SUPER_RESOLUTION_EXPORT BTV_L1_GPU_Base
+        {
+        public:
+            BTV_L1_GPU_Base();
+
+            void process(const std::vector<gpu::GpuMat>& src, gpu::GpuMat& dst, int baseIdx = 0);
+            void process(const std::vector<gpu::GpuMat>& src, gpu::GpuMat& dst,
+                         const std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> >& motions,
+                         int baseIdx = 0);
+
+            int scale;
+            int iterations;
+            double lambda;
+            double tau;
+            double alpha;
+            int btvKernelSize;
+            int blurKernelSize;
+            double blurSigma;
+            Ptr<DenseOpticalFlow> opticalFlow;
+
+        protected:
+            void run(const std::vector<gpu::GpuMat>& src, gpu::GpuMat& dst,
+                     const std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> >& relativeMotions,
+                     int baseIdx);
+
+        private:
+            std::vector<gpu::GpuMat> src_f;
+
+            std::vector<float> btvWeights;
+            int curBtvKernelSize;
+            double curAlpha;
+
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > lowResMotions;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > highResMotions;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > forward;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > backward;
+
+            Ptr<gpu::FilterEngine_GPU> filter;
+            int curBlurKernelSize;
+            double curBlurSigma;
+            int curSrcType;
+
+            gpu::GpuMat highRes;
+
+            gpu::GpuMat diffTerm, regTerm;
+            gpu::GpuMat diff;
+            gpu::GpuMat a, b, c, d;
+        };
 
         using videostab::IFrameSource;
         using videostab::NullFrameSource;
@@ -72,7 +170,6 @@ namespace cv
             BTV_L1();
 
             int temporalAreaRadius;
-            Ptr<DenseOpticalFlow> opticalFlow;
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
@@ -105,7 +202,6 @@ namespace cv
             BTV_L1_GPU();
 
             int temporalAreaRadius;
-            Ptr<DenseOpticalFlow> opticalFlow;
 
         protected:
             void initImpl(Ptr<IFrameSource>& frameSource);
@@ -117,6 +213,7 @@ namespace cv
 
             std::vector<gpu::GpuMat> frames;
             std::vector<gpu::GpuMat> results;
+
             std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > motions;
             gpu::GpuMat d_frame;
             gpu::GpuMat prevFrame;

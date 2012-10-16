@@ -25,8 +25,8 @@
 
 #pragma once
 
-#ifndef __SR_OPTICAL_FLOW_HPP__
-#define __SR_OPTICAL_FLOW_HPP__
+#ifndef __OPENCV_SR_OPTICAL_FLOW_HPP__
+#define __OPENCV_SR_OPTICAL_FLOW_HPP__
 
 #include <vector>
 #include <opencv2/core/core.hpp>
@@ -41,6 +41,7 @@ namespace cv
         {
         public:
             virtual void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2 = noArray()) = 0;
+            virtual void collectGarbage();
         };
 
         class SUPER_RESOLUTION_EXPORT FarnebackOpticalFlow : public DenseOpticalFlow
@@ -51,6 +52,7 @@ namespace cv
             FarnebackOpticalFlow();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
 
             double pyrScale;
             int numLevels;
@@ -61,7 +63,9 @@ namespace cv
             int flags;
 
         private:
-            Mat buf0, buf1, buf2, buf3, buf4, buf5;
+            void call(const Mat& input0, const Mat& input1, OutputArray dst);
+
+            Mat buf[6];
             Mat flow;
             std::vector<Mat> flows;
         };
@@ -74,6 +78,7 @@ namespace cv
             SimpleOpticalFlow();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
 
             int layers;
             int averagingBlockSize;
@@ -90,7 +95,9 @@ namespace cv
             double speedUpThr;
 
         private:
-            Mat buf0, buf1, buf2, buf3, buf4, buf5;
+            void call(Mat input0, Mat input1, Mat& dst);
+
+            Mat buf[6];
             Mat flow;
             std::vector<Mat> flows;
         };
@@ -103,6 +110,7 @@ namespace cv
             BroxOpticalFlow_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
 
             double alpha;
             double gamma;
@@ -112,8 +120,10 @@ namespace cv
             int solverIterations;
 
         private:
+            void call(const gpu::GpuMat& input0, const gpu::GpuMat& input1, gpu::GpuMat& dst1, gpu::GpuMat& dst2);
+
             gpu::BroxOpticalFlow alg;
-            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat buf[6];
             gpu::GpuMat u, v, flow;
         };
 
@@ -125,14 +135,17 @@ namespace cv
             PyrLKOpticalFlow_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
 
             int winSize;
             int maxLevel;
             int iterations;
 
         private:
+            void call(const gpu::GpuMat& input0, const gpu::GpuMat& input1, gpu::GpuMat& dst1, gpu::GpuMat& dst2);
+
             gpu::PyrLKOpticalFlow alg;
-            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat buf[6];
             gpu::GpuMat u, v, flow;
         };
 
@@ -144,6 +157,7 @@ namespace cv
             FarnebackOpticalFlow_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
 
             double pyrScale;
             int numLevels;
@@ -154,11 +168,13 @@ namespace cv
             int flags;
 
         private:
+            void call(const gpu::GpuMat& input0, const gpu::GpuMat& input1, gpu::GpuMat& dst1, gpu::GpuMat& dst2);
+
             gpu::FarnebackOpticalFlow alg;
-            gpu::GpuMat buf0, buf1, buf2, buf3, buf4, buf5;
+            gpu::GpuMat buf[6];
             gpu::GpuMat u, v, flow;
         };
     }
 }
 
-#endif // __SR_OPTICAL_FLOW_HPP__
+#endif // __OPENCV_SR_OPTICAL_FLOW_HPP__

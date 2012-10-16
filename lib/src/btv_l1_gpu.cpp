@@ -23,7 +23,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "btv_l1_gpu.hpp"
 #include "super_resolution.hpp"
 #include <opencv2/videostab/ring_buffer.hpp>
 
@@ -50,37 +49,37 @@ namespace btv_l1_device
 
 namespace
 {
-    void calcMotions(const vector<pair<GpuMat, GpuMat> >& relMotions, vector<pair<GpuMat, GpuMat> >& motions, int baseIdx, Size size)
+    void calcRelativeMotions(const vector<pair<GpuMat, GpuMat> >& forwardMotions, vector<pair<GpuMat, GpuMat> >& relMotions, int baseIdx, Size size)
     {
-        CV_DbgAssert( baseIdx >= 0 && baseIdx <= relMotions.size() );
+        CV_DbgAssert( baseIdx >= 0 && baseIdx <= forwardMotions.size() );
         #ifdef _DEBUG
-        for (size_t i = 0; i < relMotions.size(); ++i)
+        for (size_t i = 0; i < forwardMotions.size(); ++i)
         {
-            CV_DbgAssert( relMotions[i].first.size() == size );
-            CV_DbgAssert( relMotions[i].second.size() == size );
-            CV_DbgAssert( relMotions[i].first.type() == CV_32FC1 );
-            CV_DbgAssert( relMotions[i].second.type() == CV_32FC1 );
+            CV_DbgAssert( forwardMotions[i].first.size() == size );
+            CV_DbgAssert( forwardMotions[i].second.size() == size );
+            CV_DbgAssert( forwardMotions[i].first.type() == CV_32FC1 );
+            CV_DbgAssert( forwardMotions[i].second.type() == CV_32FC1 );
         }
         #endif
 
-        motions.resize(relMotions.size() + 1);
+        relMotions.resize(forwardMotions.size() + 1);
 
-        motions[baseIdx].first.create(size, CV_32FC1);
-        motions[baseIdx].first.setTo(Scalar::all(0));
+        relMotions[baseIdx].first.create(size, CV_32FC1);
+        relMotions[baseIdx].first.setTo(Scalar::all(0));
 
-        motions[baseIdx].second.create(size, CV_32FC1);
-        motions[baseIdx].second.setTo(Scalar::all(0));
+        relMotions[baseIdx].second.create(size, CV_32FC1);
+        relMotions[baseIdx].second.setTo(Scalar::all(0));
 
         for (int i = baseIdx - 1; i >= 0; --i)
         {
-            add(motions[i + 1].first, relMotions[i].first, motions[i].first);
-            add(motions[i + 1].second, relMotions[i].second, motions[i].second);
+            add(relMotions[i + 1].first, forwardMotions[i].first, relMotions[i].first);
+            add(relMotions[i + 1].second, forwardMotions[i].second, relMotions[i].second);
         }
 
-        for (size_t i = baseIdx + 1; i < motions.size(); ++i)
+        for (size_t i = baseIdx + 1; i < relMotions.size(); ++i)
         {
-            subtract(motions[i - 1].first, relMotions[i - 1].first, motions[i].first);
-            subtract(motions[i - 1].second, relMotions[i - 1].second, motions[i].second);
+            subtract(relMotions[i - 1].first, forwardMotions[i - 1].first, relMotions[i].first);
+            subtract(relMotions[i - 1].second, forwardMotions[i - 1].second, relMotions[i].second);
         }
     }
 
@@ -102,27 +101,27 @@ namespace
 
         for (size_t i = 0; i < lowResMotions.size(); ++i)
         {
-            resize(lowResMotions[i].first, highResMotions[i].first, Size(), scale, scale, INTER_LINEAR);
-            resize(lowResMotions[i].second, highResMotions[i].second, Size(), scale, scale, INTER_LINEAR);
+            resize(lowResMotions[i].first, highResMotions[i].first, Size(), scale, scale, INTER_CUBIC);
+            resize(lowResMotions[i].second, highResMotions[i].second, Size(), scale, scale, INTER_CUBIC);
 
             multiply(highResMotions[i].first, Scalar::all(scale), highResMotions[i].first);
             multiply(highResMotions[i].second, Scalar::all(scale), highResMotions[i].second);
         }
     }
 
-    void buildMotionMaps(const pair<GpuMat, GpuMat>& motion, pair<GpuMat, GpuMat>& forward, pair<GpuMat, GpuMat>& backward)
+    void buildMotionMaps(const pair<GpuMat, GpuMat>& motion, pair<GpuMat, GpuMat>& forwardMap, pair<GpuMat, GpuMat>& backwardMap)
     {
         CV_DbgAssert( motion.first.type() == CV_32FC1 );
         CV_DbgAssert( motion.second.type() == motion.first.type() );
         CV_DbgAssert( motion.second.size() == motion.first.size() );
 
-        forward.first.create(motion.first.size(), motion.first.type());
-        forward.second.create(motion.first.size(), motion.first.type());
+        forwardMap.first.create(motion.first.size(), motion.first.type());
+        forwardMap.second.create(motion.first.size(), motion.first.type());
 
-        backward.first.create(motion.first.size(), motion.first.type());
-        backward.second.create(motion.first.size(), motion.first.type());
+        backwardMap.first.create(motion.first.size(), motion.first.type());
+        backwardMap.second.create(motion.first.size(), motion.first.type());
 
-        btv_l1_device::buildMotionMaps(motion.first, motion.second, forward.first, forward.second, backward.first, backward.second);
+        btv_l1_device::buildMotionMaps(motion.first, motion.second, forwardMap.first, forwardMap.second, backwardMap.first, backwardMap.second);
     }
 
     void upscale(const GpuMat& src, GpuMat& dst, int scale)
@@ -212,6 +211,7 @@ cv::superres::BTV_L1_GPU_Base::BTV_L1_GPU_Base()
     btvKernelSize = 7;
     blurKernelSize = 5;
     blurSigma = 0.0;
+    opticalFlow = new FarnebackOpticalFlow_GPU;
 
     curBtvKernelSize = -1;
     curAlpha = -1.0;
@@ -221,7 +221,7 @@ cv::superres::BTV_L1_GPU_Base::BTV_L1_GPU_Base()
     curSrcType = -1;
 }
 
-void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& dst, const vector<pair<GpuMat, GpuMat> >& motions, int baseIdx)
+void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& dst, int baseIdx)
 {
     CV_DbgAssert( !src.empty() );
 #ifdef _DEBUG
@@ -231,15 +231,62 @@ void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& d
         CV_DbgAssert( src[i].type() == src[0].type() );
     }
 #endif
-    CV_DbgAssert( motions.size() == src.size() - 1 );
-#ifdef _DEBUG
-    for (size_t i = 1; i < motions.size(); ++i)
+    CV_DbgAssert( baseIdx >= 0 && baseIdx < src.size() );
+
+    // calc motions between input frames
+
+    lowResMotions.resize(src.size());
+    for (size_t i = 0; i < src.size(); ++i)
     {
-        CV_DbgAssert( motions[i].first.size() == src[0].size() );
-        CV_DbgAssert( motions[i].second.size() == src[0].size() );
+        if (i != baseIdx)
+            opticalFlow->calc(src[i], src[baseIdx], lowResMotions[i].first, lowResMotions[i].second);
+        else
+        {
+            lowResMotions[i].first.create(src[i].size(), CV_32FC1);
+            lowResMotions[i].first.setTo(Scalar::all(0));
+
+            lowResMotions[i].second.create(src[i].size(), CV_32FC1);
+            lowResMotions[i].second.setTo(Scalar::all(0));
+        }
+    }
+
+    // run
+
+    run(src, dst, lowResMotions, baseIdx);
+}
+
+void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& dst, const vector<pair<GpuMat, GpuMat> >& forwardMotions, int baseIdx)
+{
+    CV_DbgAssert( !src.empty() );
+#ifdef _DEBUG
+    for (size_t i = 1; i < src.size(); ++i)
+    {
+        CV_DbgAssert( src[i].size() == src[0].size() );
+        CV_DbgAssert( src[i].type() == src[0].type() );
+    }
+#endif
+    CV_DbgAssert( forwardMotions.size() == src.size() - 1 );
+#ifdef _DEBUG
+    for (size_t i = 1; i < forwardMotions.size(); ++i)
+    {
+        CV_DbgAssert( forwardMotions[i].first.size() == src[0].size() );
+        CV_DbgAssert( forwardMotions[i].second.size() == src[0].size() );
     }
 #endif
     CV_DbgAssert( baseIdx >= 0 && baseIdx < src.size() );
+
+    // convert sources to float
+
+    calcRelativeMotions(forwardMotions, lowResMotions, baseIdx, src[0].size());
+
+    // run
+
+    run(src, dst, lowResMotions, baseIdx);
+}
+
+
+void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, const vector<pair<GpuMat, GpuMat> >& relativeMotions, int baseIdx)
+{
     CV_DbgAssert( scale > 1 );
     CV_DbgAssert( iterations > 0 );
     CV_DbgAssert( tau > 0.0 );
@@ -264,8 +311,7 @@ void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& d
 
     // calc motions between input frames
 
-    calcMotions(motions, lowResMotions, baseIdx, src[0].size());
-    upscaleMotions(lowResMotions, highResMotions, scale);
+    upscaleMotions(relativeMotions, highResMotions, scale);
 
     forward.resize(highResMotions.size());
     backward.resize(highResMotions.size());
@@ -343,10 +389,11 @@ void cv::superres::BTV_L1_GPU_Base::process(const vector<GpuMat>& src, GpuMat& d
     highRes(inner).convertTo(dst, src[0].depth());
 }
 
+////////////////////////////////////////////////////////////
+
 cv::superres::BTV_L1_GPU::BTV_L1_GPU()
 {
     temporalAreaRadius = 4;
-    opticalFlow = new FarnebackOpticalFlow_GPU;
 }
 
 void cv::superres::BTV_L1_GPU::initImpl(Ptr<IFrameSource>& frameSource)
