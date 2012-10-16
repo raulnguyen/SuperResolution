@@ -46,35 +46,6 @@ using namespace cv::videostab;
         cout << tm.getTimeSec() << " sec" << endl; \
     }
 
-class GrayScaleVideoSource : public IFrameSource
-{
-public:
-    explicit GrayScaleVideoSource(const Ptr<IFrameSource>& base) : base(base) {}
-
-    void reset();
-    Mat nextFrame();
-
-private:
-    Ptr<IFrameSource> base;
-    Mat buf;
-};
-
-void GrayScaleVideoSource::reset()
-{
-    base->reset();
-}
-
-Mat GrayScaleVideoSource::nextFrame()
-{
-    Mat frame = base->nextFrame();
-
-    if (frame.channels() == 1)
-        return frame;
-
-    cvtColor(frame, buf, frame.channels() == 3 ? COLOR_BGR2GRAY : COLOR_BGRA2GRAY);
-    return buf;
-}
-
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
@@ -109,8 +80,8 @@ int main(int argc, const char* argv[])
 
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));
-    Ptr<IFrameSource> bicubicSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));
+    Ptr<IFrameSource> superResSource(new VideoFileSource(inputVideoName));
+    Ptr<IFrameSource> bicubicSource(new VideoFileSource(inputVideoName));
 
     // skip first frame, it is usually corrupted
     {
