@@ -32,6 +32,7 @@
 #include <opencv2/videostab/frame_source.hpp>
 #include "optical_flow.hpp"
 #include "btv_l1.hpp"
+#include "btv_l1_gpu.hpp"
 #include "super_resolution_export.h"
 
 namespace cv
@@ -84,7 +85,7 @@ namespace cv
             std::vector<Mat> frames;
             std::vector<Mat> results;
 
-            std::vector<Mat_<Point2f> > motions;
+            std::vector<Mat> motions;
             Mat prevFrame;
 
             int storePos;
@@ -92,8 +93,42 @@ namespace cv
             int outPos;
 
             std::vector<Mat> src;
-            std::vector<Mat_<Point2f> > relMotions;
+            std::vector<Mat> relMotions;
             Mat dst;
+        };
+
+        class SUPER_RESOLUTION_EXPORT BTV_L1_GPU : public SuperResolution, private BTV_L1_GPU_Base
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            BTV_L1_GPU();
+
+            int temporalAreaRadius;
+            Ptr<DenseOpticalFlow> opticalFlow;
+
+        protected:
+            void initImpl(Ptr<IFrameSource>& frameSource);
+            Mat processImpl(Ptr<IFrameSource>& frameSource);
+
+        private:
+            void addNewFrame(const Mat& frame);
+            void processFrame(int idx);
+
+            std::vector<gpu::GpuMat> frames;
+            std::vector<gpu::GpuMat> results;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > motions;
+            gpu::GpuMat d_frame;
+            gpu::GpuMat prevFrame;
+
+            int storePos;
+            int procPos;
+            int outPos;
+
+            std::vector<gpu::GpuMat> src;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > relMotions;
+            gpu::GpuMat dst;
+            Mat h_dst;
         };
     }
 }

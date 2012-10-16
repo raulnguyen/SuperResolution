@@ -101,7 +101,12 @@ int main(int argc, const char* argv[])
     const int scale = cmd.get<int>("scale");
     const bool useGpu = cmd.has("gpu");
 
-    Ptr<SuperResolution> superRes(new BTV_L1);
+    Ptr<SuperResolution> superRes;
+    if (useGpu)
+        superRes = new BTV_L1_GPU;
+    else
+        superRes = new BTV_L1;
+
     superRes->set("scale", scale);
 
     Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName)));

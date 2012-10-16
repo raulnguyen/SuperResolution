@@ -82,8 +82,8 @@ namespace
     {
         CV_DbgAssert( motion.type() == CV_32FC2 );
 
-        forward.create(motion.size(), CV_32FC2);
-        backward.create(motion.size(), CV_32FC2);
+        forward.create(motion.size(), motion.type());
+        backward.create(motion.size(), motion.type());
 
         for (int y = 0; y < motion.rows; ++y)
         {
@@ -294,11 +294,8 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     curSrcType = -1;
 }
 
-void cv::superres::BTV_L1_Base::process(InputArrayOfArrays _src, OutputArray _dst, InputArrayOfArrays _motions, int baseIdx)
+void cv::superres::BTV_L1_Base::process(const vector<Mat>& src, OutputArray dst, const vector<Mat>& motions, int baseIdx)
 {
-    _src.getMatVector(src);
-    _motions.getMatVector(motions);
-
     CV_DbgAssert( !src.empty() );
 #ifdef _DEBUG
     for (size_t i = 1; i < src.size(); ++i)
@@ -413,7 +410,7 @@ void cv::superres::BTV_L1_Base::process(InputArrayOfArrays _src, OutputArray _ds
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
-    highRes(inner).convertTo(_dst, src[0].depth());
+    highRes(inner).convertTo(dst, src[0].depth());
 }
 
 cv::superres::BTV_L1::BTV_L1()
@@ -485,12 +482,12 @@ void cv::superres::BTV_L1::addNewFrame(const Mat& frame)
 
 void cv::superres::BTV_L1::processFrame(int idx)
 {
-    const int startIdx = std::max(idx - temporalAreaRadius, 0);
+    const int startIdx = max(idx - temporalAreaRadius, 0);
     const int procIdx = idx;
-    const int endIdx = std::min(startIdx + 2 * temporalAreaRadius, storePos);
+    const int endIdx = min(startIdx + 2 * temporalAreaRadius, storePos);
 
     src.resize(endIdx - startIdx + 1);
-    relMotions.resize(endIdx - startIdx );
+    relMotions.resize(endIdx - startIdx);
     int baseIdx = -1;
 
     for (int i = startIdx, k = 0; i <= endIdx; ++i, ++k)

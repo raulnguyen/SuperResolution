@@ -201,8 +201,8 @@ void cv::superres::FarnebackOpticalFlow::calc(InputArray _frame0, InputArray _fr
     {
         split(flow, flows);
 
-        flows[0].copyTo(flow1);
-        flows[1].copyTo(flow2);
+        ::set(flow1, flows[0]);
+        ::set(flow2, flows[1]);
     }
 }
 
@@ -258,8 +258,8 @@ void cv::superres::SimpleOpticalFlow::calc(InputArray _frame0, InputArray _frame
     {
         split(flow, flows);
 
-        flows[0].copyTo(flow1);
-        flows[1].copyTo(flow2);
+        ::set(flow1, flows[0]);
+        ::set(flow2, flows[1]);
     }
 }
 

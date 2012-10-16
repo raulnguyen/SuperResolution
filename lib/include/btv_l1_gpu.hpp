@@ -25,12 +25,12 @@
 
 #pragma once
 
-#ifndef __SR_BTV_L1_HPP__
-#define __SR_BTV_L1_HPP__
+#ifndef __SR_BTV_L1_GPU_HPP__
+#define __SR_BTV_L1_GPU_HPP__
 
 #include <vector>
 #include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/gpu/gpu.hpp>
 #include "super_resolution_export.h"
 
 namespace cv
@@ -39,46 +39,48 @@ namespace cv
     {
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
         // Dennis Mitzel, Thomas Pock, Thomas Schoenemann, Daniel Cremers. Video Super Resolution using Duality Based TV-L1 Optical Flow.
-        class SUPER_RESOLUTION_EXPORT BTV_L1_Base
+        class SUPER_RESOLUTION_EXPORT BTV_L1_GPU_Base
         {
         public:
-            BTV_L1_Base();
+            BTV_L1_GPU_Base();
 
-            void process(const std::vector<Mat>& src, OutputArray dst, const std::vector<Mat>& motions, int baseIdx = 0);
+            void process(const std::vector<gpu::GpuMat>& src, gpu::GpuMat& dst,
+                         const std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> >& motions,
+                         int baseIdx = 0);
 
             int scale;
             int iterations;
-            double tau;
             double lambda;
+            double tau;
             double alpha;
             int btvKernelSize;
             int blurKernelSize;
             double blurSigma;
 
         private:
-            std::vector<Mat> src_f;
+            std::vector<gpu::GpuMat> src_f;
 
             std::vector<float> btvWeights;
             int curBtvKernelSize;
             double curAlpha;
 
-            std::vector<Mat> lowResMotions;
-            std::vector<Mat> highResMotions;
-            std::vector<Mat> forward;
-            std::vector<Mat> backward;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > lowResMotions;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > highResMotions;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > forward;
+            std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > backward;
 
-            Ptr<FilterEngine> filter;
+            Ptr<gpu::FilterEngine_GPU> filter;
             int curBlurKernelSize;
             double curBlurSigma;
             int curSrcType;
 
-            Mat highRes;
+            gpu::GpuMat highRes;
 
-            Mat diffTerm, regTerm;
-            Mat diff;
-            Mat a, b, c, d;
+            gpu::GpuMat diffTerm, regTerm;
+            gpu::GpuMat diff;
+            gpu::GpuMat a, b, c, d;
         };
     }
 }
 
-#endif // __SR_BTV_L1_HPP__
+#endif // __SR_BTV_L1_GPU_HPP__

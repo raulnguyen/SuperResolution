@@ -91,6 +91,18 @@ namespace cv
                           obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0, "Gaussian blur sigma.");
                           obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0, "Radius of the temporal search area.");
                           obj.info()->addParam<DenseOpticalFlow>(obj, "opticalFlow", obj.opticalFlow, false, 0, 0, "Dense optical flow algorithm."));
+
+        CV_INIT_ALGORITHM(BTV_L1_GPU, "SuperResolution.BTV_L1_GPU",
+                          obj.info()->addParam(obj, "scale", obj.scale, false, 0, 0, "Scale factor.");
+                          obj.info()->addParam(obj, "iterations", obj.iterations, false, 0, 0, "Iteration count.");
+                          obj.info()->addParam(obj, "tau", obj.tau, false, 0, 0, "Asymptotic value of steepest descent method.");
+                          obj.info()->addParam(obj, "lambda", obj.lambda, false, 0, 0, "Weight parameter to balance data term and smoothness term.");
+                          obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0, "Parameter of spacial distribution in btv.");
+                          obj.info()->addParam(obj, "btvKernelSize", obj.btvKernelSize, false, 0, 0, "Kernel size of btv filter.");
+                          obj.info()->addParam(obj, "blurKernelSize", obj.blurKernelSize, false, 0, 0, "Gaussian blur kernel size.");
+                          obj.info()->addParam(obj, "blurSigma", obj.blurSigma, false, 0, 0, "Gaussian blur sigma.");
+                          obj.info()->addParam(obj, "temporalAreaRadius", obj.temporalAreaRadius, false, 0, 0, "Radius of the temporal search area.");
+                          obj.info()->addParam<DenseOpticalFlow>(obj, "opticalFlow", obj.opticalFlow, false, 0, 0, "Dense optical flow algorithm."));
     }
 }
 
@@ -105,6 +117,7 @@ bool cv::superres::initModule_superres()
     all &= !FarnebackOpticalFlow_GPU_info_auto.name().empty();
 
     all &= !BTV_L1_info_auto.name().empty();
+    all &= !BTV_L1_GPU_info_auto.name().empty();
 
     return all;
 }
