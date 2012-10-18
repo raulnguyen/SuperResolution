@@ -24,7 +24,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "super_resolution.hpp"
-#include <opencv2/videostab/ring_buffer.hpp>
+#include "ring_buffer.hpp"
 
 using namespace std;
 using namespace cv;

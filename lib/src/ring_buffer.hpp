@@ -25,20 +25,24 @@
 
 #pragma once
 
-#ifndef __INPUT_ARRAY_UTILITY_HPP__
-#define __INPUT_ARRAY_UTILITY_HPP__
+#ifndef __RING_BUFFER_HPP__
+#define __RING_BUFFER_HPP__
 
+#include <vector>
 #include <opencv2/core/core.hpp>
-#include <opencv2/core/gpumat.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include "super_resolution_export.h"
 
-SUPER_RESOLUTION_NO_EXPORT cv::Mat getMat(cv::InputArray arr, cv::Mat& buf);
-SUPER_RESOLUTION_NO_EXPORT cv::gpu::GpuMat getGpuMat(cv::InputArray arr, cv::gpu::GpuMat& buf);
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline const T& at(int index, const std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
 
-SUPER_RESOLUTION_NO_EXPORT void copy(cv::OutputArray dst, const cv::Mat& src);
-SUPER_RESOLUTION_NO_EXPORT void copy(cv::OutputArray dst, const cv::gpu::GpuMat& src);
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline T& at(int index, std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
 
-SUPER_RESOLUTION_NO_EXPORT cv::Mat convertToType(const cv::Mat& src, int depth, int cn, cv::Mat& buf0, cv::Mat& buf1);
-SUPER_RESOLUTION_NO_EXPORT cv::gpu::GpuMat convertToType(const cv::gpu::GpuMat& src, int depth, int cn, cv::gpu::GpuMat& buf0, cv::gpu::GpuMat& buf1);
-
-#endif // __INPUT_ARRAY_UTILITY_HPP__
+#endif // __RING_BUFFER_HPP__
