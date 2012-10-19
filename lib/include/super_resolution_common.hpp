@@ -28,21 +28,17 @@
 #ifndef __SUPER_RESOLUTION_COMMON_HPP__
 #define __SUPER_RESOLUTION_COMMON_HPP__
 
-#include <opencv2/videostab/motion_core.hpp>
+#include <opencv2/videostab/global_motion.hpp>
 
 namespace cv
 {
     namespace superres
     {
         using cv::videostab::MotionModel;
-        using cv::videostab::MM_TRANSLATION;
-        using cv::videostab::MM_TRANSLATION_AND_SCALE;
-        using cv::videostab::MM_ROTATION;
-        using cv::videostab::MM_RIGID;
-        using cv::videostab::MM_SIMILARITY;
-        using cv::videostab::MM_AFFINE;
-        using cv::videostab::MM_HOMOGRAPHY;
-        using cv::videostab::MM_UNKNOWN; // General motion via optical flow
+        using cv::videostab::TRANSLATION;
+        using cv::videostab::TRANSLATION_AND_SCALE;
+        using cv::videostab::LINEAR_SIMILARITY;
+        using cv::videostab::AFFINE;
 
         enum BlurModel
         {

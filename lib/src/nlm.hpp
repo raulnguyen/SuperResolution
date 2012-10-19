@@ -78,7 +78,7 @@ namespace cv
 
             Mat buf;
 
-            Ptr<videostab::ImageMotionEstimatorBase> motionEstimator;
+            Ptr<videostab::IGlobalMotionEstimator> motionEstimator;
             Ptr<videostab::DeblurerBase> deblurer;
             std::vector<Mat> outFrames;
             std::vector<Mat> motions;

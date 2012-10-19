@@ -46,15 +46,14 @@ namespace
         bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2);
 
     private:
-        Ptr<ImageMotionEstimatorBase> motionEstimator;
+        Ptr<IGlobalMotionEstimator> motionEstimator;
         Mat h_frame0;
         Mat h_frame1;
     };
 
     GlobalMotionEstimator::GlobalMotionEstimator(MotionModel model)
     {
-        Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2(model));
-        motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
+        motionEstimator = new PyrLkRobustMotionEstimator;
     }
 
     bool GlobalMotionEstimator::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
@@ -65,49 +64,12 @@ namespace
         CV_DbgAssert(frame0.size() == frame1.size());
         CV_DbgAssert(frame0.type() == frame1.type());
 
-        bool ok;
-        Mat M = motionEstimator->estimate(frame0, frame1, &ok);
+        Mat M = motionEstimator->estimate(frame0, frame1);
 
         setCpuMat(M, m1);
         m2.release();
 
-        return ok;
-    }
-
-    //////////////////////
-
-    class GlobalMotionEstimator_GPU : public MotionEstimator
-    {
-    public:
-        explicit GlobalMotionEstimator_GPU(MotionModel model);
-
-        bool estimate(InputArray frame0, InputArray frame1, OutputArray m1, OutputArray m2);
-
-    private:
-        KeypointBasedMotionEstimatorGpu motionEstimator;
-        GpuMat d_frame0;
-        GpuMat d_frame1;
-    };
-
-    GlobalMotionEstimator_GPU::GlobalMotionEstimator_GPU(MotionModel model) : motionEstimator(new MotionEstimatorRansacL2(model))
-    {
-    }
-
-    bool GlobalMotionEstimator_GPU::estimate(InputArray _frame0, InputArray _frame1, OutputArray m1, OutputArray m2)
-    {
-        GpuMat frame0 = getGpuMat(_frame0, d_frame0);
-        GpuMat frame1 = getGpuMat(_frame1, d_frame1);
-
-        CV_DbgAssert(frame0.size() == frame1.size());
-        CV_DbgAssert(frame0.type() == frame1.type());
-
-        bool ok;
-        Mat M = motionEstimator.estimate(frame0, frame1, &ok);
-
-        setCpuMat(M, m1);
-        m2.release();
-
-        return ok;
+        return true;
     }
 
     //////////////////////
@@ -231,17 +193,6 @@ namespace
 
 Ptr<MotionEstimator> MotionEstimator::create(MotionModel model, bool useGpu)
 {
-    if (useGpu)
-    {
-        if (model <= MM_HOMOGRAPHY)
-            return Ptr<MotionEstimator>(new GlobalMotionEstimator_GPU(model));
-
-        return Ptr<MotionEstimator>(new GeneralMotionEstimator_GPU);
-    }
-
-    if (model <= MM_HOMOGRAPHY)
-        return Ptr<MotionEstimator>(new GlobalMotionEstimator(model));
-
     return Ptr<MotionEstimator>(new GeneralMotionEstimator);
 }
 

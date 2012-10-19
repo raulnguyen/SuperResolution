@@ -77,28 +77,20 @@ Mat GrayScaleVideoSource::nextFrame()
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ video v | text.avi | Input video }"
-        "{ scale s | 4        | Scale factor }"
-        "{ gpu     |          | Use GPU }"
-        "{ help h  |          | Print help message }"
+        "{ v | video | text.avi | Input video }"
+        "{ s | scale | 4        | Scale factor }"
+        "{ gpu | gpu     |          | Use GPU }"
     );
-
-    if (cmd.has("help"))
-    {
-        cmd.about("This sample demonstrates Super Resolution algorithms for video sequence");
-        cmd.printMessage();
-        return 0;
-    }
 
     const string inputVideoName = cmd.get<string>("video");
     const int scale = cmd.get<int>("scale");
-    const bool useGpu = cmd.has("gpu");
+    const bool useGpu = cmd.get<bool>("gpu");
 
-    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_BILATERAL_TOTAL_VARIATION, useGpu);
+    Ptr<VideoSuperResolution> superRes = VideoSuperResolution::create(VIDEO_SR_NLM, useGpu);
     superRes->set("scale", scale);
 
-    Ptr<IFrameSource> superResSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); superResSource->nextFrame();
-    Ptr<IFrameSource> bicubicSource(new GrayScaleVideoSource(new VideoFileSource(inputVideoName))); bicubicSource->nextFrame();
+    Ptr<IFrameSource> superResSource((new VideoFileSource(inputVideoName))); superResSource->nextFrame();
+    Ptr<IFrameSource> bicubicSource((new VideoFileSource(inputVideoName))); bicubicSource->nextFrame();
 
     superRes->setFrameSource(superResSource);
 

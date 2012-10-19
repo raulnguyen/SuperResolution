@@ -115,57 +115,56 @@ namespace
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ image i | boy.png | Input image }"
-        "{ scale s | 2       | Scale factor }"
-        "{ help h  |         | Print help message }"
+        "{ i | image | boy.png | Input image }"
+        "{ s | scale | 2       | Scale factor }"
+        "{ h | help |         | Print help message }"
     );
-
-    if (cmd.has("help"))
-    {
-        cmd.about("This sample demonstrates Super Resolution algorithms for single image");
-        cmd.printMessage();
-        return 0;
-    }
 
     const string imageFileName = cmd.get<string>("image");
     const int scale = cmd.get<int>("scale");
 
-    Mat gold = imread(imageFileName, IMREAD_GRAYSCALE);
+    Mat gold = imread(imageFileName);
     if (gold.empty())
     {
         cerr << "Can't open image " << imageFileName << endl;
         return -1;
     }
 
-    Mat src = createDegradedImage(gold, Point2d(0, 0), 0, scale);
+//    Mat src = createDegradedImage(gold, Point2d(0, 0), 0, scale);
 
-    // number of input images for super resolution
-    const int degImagesCount = 16;
-    vector<Mat> degImages(degImagesCount);
-    for (int i = 0; i < degImagesCount; ++i)
-    {
-        const double dscale = scale;
+//    // number of input images for super resolution
+//    const int degImagesCount = 16;
+//    vector<Mat> degImages(degImagesCount);
+//    for (int i = 0; i < degImagesCount; ++i)
+//    {
+//        const double dscale = scale;
 
-        Point2d move;
-        move.x = theRNG().uniform(-dscale, dscale);
-        move.y = theRNG().uniform(-dscale, dscale);
+//        Point2d move;
+//        move.x = theRNG().uniform(-dscale, dscale);
+//        move.y = theRNG().uniform(-dscale, dscale);
 
-        const double theta = theRNG().uniform(0.0, CV_PI/10);
+//        const double theta = theRNG().uniform(0.0, CV_PI/10);
 
-        degImages[i] = createDegradedImage(gold, move, theta, scale);
-    }
+//        degImages[i] = createDegradedImage(gold, move, theta, scale);
+//    }
 
-    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_BILATERAL_TOTAL_VARIATION, true);
+    Ptr<ImageSuperResolution> superRes = ImageSuperResolution::create(IMAGE_SR_EXAMPLE_BASED, false);
 
     superRes->set("scale", scale);
 
-    superRes->train(degImages);
+    vector<Mat> train;
+    train.push_back(imread("girl.png"));
+    train.push_back(imread("old_man.png"));
+    train.push_back(imread("women.png"));
+    train.push_back(imread("mother.png"));
+
+    superRes->train(train);
 
     Mat highResImage;
-    MEASURE_TIME(superRes->process(src, highResImage), "Process");
+    MEASURE_TIME(superRes->process(gold, highResImage), "Process");
 
     Mat bicubic;
-    resize(src, bicubic, Size(), scale, scale, INTER_CUBIC);
+    resize(gold, bicubic, Size(), scale, scale, INTER_CUBIC);
 
     imshow("gold", gold);
     imshow("Super Resolution", highResImage);

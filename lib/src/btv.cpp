@@ -26,7 +26,6 @@
 #include "btv.hpp"
 #include <opencv2/core/internal.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/videostab/ring_buffer.hpp>
 #ifdef WITH_TESTS
     #include <opencv2/ts/ts_gtest.h>
 #endif
@@ -182,7 +181,7 @@ namespace
 
         Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
-        if (motionModel == MM_UNKNOWN)
+//        if (motionModel == MM_UNKNOWN)
         {
             CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
             CV_DbgAssert(m1.size() == lowResSize);
@@ -200,40 +199,40 @@ namespace
                 calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
             }
         }
-        else if (motionModel < MM_HOMOGRAPHY)
-        {
-            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
+//        else if (motionModel < MM_HOMOGRAPHY)
+//        {
+//            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
+//            CV_DbgAssert(m1.cols == 3);
+//            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
 
-            if (m1.type() == CV_32FC1)
-            {
-                AffineMotion<float> motion(m1);
-                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
-            }
-            else
-            {
-                AffineMotion<double> motion(m1);
-                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
-            }
-        }
-        else
-        {
-            CV_DbgAssert(m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
+//            if (m1.type() == CV_32FC1)
+//            {
+//                AffineMotion<float> motion(m1);
+//                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
+//            }
+//            else
+//            {
+//                AffineMotion<double> motion(m1);
+//                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
+//            }
+//        }
+//        else
+//        {
+//            CV_DbgAssert(m1.rows == 3);
+//            CV_DbgAssert(m1.cols == 3);
+//            CV_DbgAssert(m1.type() == CV_32FC1 || m1.type() == CV_64FC1);
 
-            if (m1.type() == CV_32FC1)
-            {
-                PerspectiveMotion<float> motion(m1);
-                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
-            }
-            else
-            {
-                PerspectiveMotion<double> motion(m1);
-                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
-            }
-        }
+//            if (m1.type() == CV_32FC1)
+//            {
+//                PerspectiveMotion<float> motion(m1);
+//                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
+//            }
+//            else
+//            {
+//                PerspectiveMotion<double> motion(m1);
+//                calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, DHF);
+//            }
+//        }
     }
 }
 
@@ -248,15 +247,13 @@ cv::superres::BilateralTotalVariation::BilateralTotalVariation()
     workDepth = CV_64F;
     blurModel = BLUR_GAUSS;
     blurKernelSize = 5;
-    setMotionModel(MM_AFFINE);
+    setMotionModel(0);
 
     curBlurModel = -1;
 }
 
 void cv::superres::BilateralTotalVariation::setMotionModel(int motionModel)
 {
-    CV_DbgAssert(motionModel >= MM_TRANSLATION && motionModel <= MM_UNKNOWN);
-
     motionEstimator = MotionEstimator::create(static_cast<MotionModel>(motionModel));
     this->motionModel = motionModel;
 }
@@ -750,7 +747,7 @@ void cv::superres::BTV_Image::process(InputArray _src, OutputArray dst)
 
     int count = 1;
     src.convertTo(y[0], workDepth);
-    calcDhf(src.size(), scale, blurKernelSize, Mat_<float>::eye(2, 3), Mat(), MM_AFFINE, DHF[0]);
+    calcDhf(src.size(), scale, blurKernelSize, Mat_<float>::eye(2, 3), Mat(), AFFINE, DHF[0]);
 
     for (size_t i = 0; i < images.size(); ++i)
     {
@@ -776,6 +773,21 @@ void cv::superres::BTV_Image::setMotionModel(int motionModel)
 
 ///////////////////////////////////////////////////////////////
 // BTV_Video
+
+namespace
+{
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline const T& at(int index, const std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline T& at(int index, std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+}
 
 namespace cv
 {
@@ -968,7 +980,7 @@ namespace cv
             int blurKernelRadius = 2;
 
             Mat DHF;
-            calcDhf(lowResSize, scale, blurKernelRadius, Mat_<float>::eye(2, 3), Mat(), MM_AFFINE, DHF);
+            calcDhf(lowResSize, scale, blurKernelRadius, Mat_<float>::eye(2, 3), Mat(), AFFINE, DHF);
 
             EXPECT_EQ(lowResSize.area(), DHF.rows);
             EXPECT_EQ(blurKernelRadius * blurKernelRadius, DHF.cols);

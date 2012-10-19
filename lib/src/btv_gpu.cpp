@@ -27,7 +27,6 @@
 #include <opencv2/core/internal.hpp>
 #include <opencv2/gpu/gpu.hpp>
 #include <opencv2/gpu/stream_accessor.hpp>
-#include <opencv2/videostab/ring_buffer.hpp>
 #include "cpu_gpu_transform.hpp"
 #ifdef WITH_TESTS
     #include <cuda_runtime.h>
@@ -40,6 +39,23 @@ using namespace cv;
 using namespace cv::superres;
 using namespace cv::videostab;
 using namespace cv::gpu;
+
+
+
+namespace
+{
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline const T& at(int index, const std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline T& at(int index, std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+}
 
 #ifdef _DEBUG
     #define cusparseCall(op) CV_DbgAssert((op) == CUSPARSE_STATUS_SUCCESS)
@@ -100,7 +116,7 @@ cv::superres::BilateralTotalVariation_GPU::BilateralTotalVariation_GPU()
     blurModel = BLUR_GAUSS;
     blurKernelSize = 5;
 
-    setMotionModel(MM_AFFINE);
+    setMotionModel(AFFINE);
 
     cusparseCall( cusparseCreate(&handle) );
     cusparseCall( cusparseCreateMatDescr(&descr) );
@@ -114,8 +130,6 @@ cv::superres::BilateralTotalVariation_GPU::~BilateralTotalVariation_GPU()
 
 void cv::superres::BilateralTotalVariation_GPU::setMotionModel(int motionModel)
 {
-    CV_DbgAssert(motionModel >= MM_TRANSLATION && motionModel <= MM_UNKNOWN);
-
     motionEstimator = MotionEstimator::create(static_cast<MotionModel>(motionModel), true);
     this->motionModel = motionModel;
 }
@@ -416,7 +430,7 @@ namespace
 
         Size highResSize(lowResSize.width * scale, lowResSize.height * scale);
 
-        if (motionModel == MM_UNKNOWN)
+        //if (motionModel == MM_UNKNOWN)
         {
             CV_DbgAssert(m1.type() == CV_32FC1);
             CV_DbgAssert(m1.size() == lowResSize);
@@ -426,24 +440,24 @@ namespace
             GeneralMotion<float> motion(m1, m2);
             calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
         }
-        else if (motionModel < MM_HOMOGRAPHY)
-        {
-            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
+//        else if (motionModel < MM_HOMOGRAPHY)
+//        {
+//            CV_DbgAssert(m1.rows == 2 || m1.rows == 3);
+//            CV_DbgAssert(m1.cols == 3);
+//            CV_DbgAssert(m1.type() == CV_32FC1);
 
-            AffineMotion<float> motion(m1);
-            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
-        }
-        else
-        {
-            CV_DbgAssert(m1.rows == 3);
-            CV_DbgAssert(m1.cols == 3);
-            CV_DbgAssert(m1.type() == CV_32FC1);
+//            AffineMotion<float> motion(m1);
+//            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
+//        }
+//        else
+//        {
+//            CV_DbgAssert(m1.rows == 3);
+//            CV_DbgAssert(m1.cols == 3);
+//            CV_DbgAssert(m1.type() == CV_32FC1);
 
-            PerspectiveMotion<float> motion(m1);
-            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
-        }
+//            PerspectiveMotion<float> motion(m1);
+//            calcDhfImpl(lowResSize, highResSize, scale, blurKernelSize, motion, blurWeights, vals, rowPtr, colInd, DHF);
+//        }
     }
 }
 
@@ -567,7 +581,7 @@ void cv::superres::BTV_Image_GPU::process(InputArray _src, OutputArray dst)
     int count = 1;
     createContinuous(src.size(), CV_32FC(src.channels()), y[0]);
     src.convertTo(y[0], CV_32F);
-    calcDhf(src.size(), scale, blurKernelSize, Mat_<float>::eye(2, 3), Mat(), MM_AFFINE, blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[0]);
+    calcDhf(src.size(), scale, blurKernelSize, Mat_<float>::eye(2, 3), Mat(), AFFINE, blurWeights, valsBuf, rowPtrBuf, colIndBuf, DHF[0]);
 
     for (size_t i = 0; i < images.size(); ++i)
     {

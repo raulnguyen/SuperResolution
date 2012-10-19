@@ -25,13 +25,28 @@
 
 #include "nlm.hpp"
 #include <opencv2/core/internal.hpp>
-#include <opencv2/videostab/ring_buffer.hpp>
 #include "extract_patch.hpp"
 
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
 using namespace cv::videostab;
+
+
+namespace
+{
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline const T& at(int index, const std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+
+template <typename T, class A>
+SUPER_RESOLUTION_NO_EXPORT inline T& at(int index, std::vector<T, A>& items)
+{
+    return items[cv::borderInterpolate(index, static_cast<int>(items.size()), cv::BORDER_WRAP)];
+}
+}
 
 namespace cv
 {
@@ -72,8 +87,7 @@ cv::superres::Nlm::Nlm()
     sigma = 3;
     doDeblurring = true;
 
-    Ptr<MotionEstimatorBase> baseEstimator(new MotionEstimatorRansacL2);
-    motionEstimator = new KeypointBasedMotionEstimator(baseEstimator);
+    motionEstimator = new PyrLkRobustMotionEstimator;
     deblurer = new WeightingDeblurer;
 
     deblurer->setFrames(outFrames);
