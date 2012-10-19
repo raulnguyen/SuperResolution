@@ -86,8 +86,10 @@ int main(int argc, const char* argv[])
     // skip first frame, it is usually corrupted
     {
         Mat frame = frameSource->nextFrame();
-        cout << "Input size : " << frame.cols << 'x' << frame.rows << endl;
-        cout << "Scale factor : " << scale << endl;
+        cout << "Input size        : " << frame.cols << 'x' << frame.rows << endl;
+        cout << "Scale factor      : " << scale << endl;
+        cout << "Iterations        : " << iterations << endl;
+        cout << "Frames to process : " << temporalAreaRadius * 2 + 1 << endl;
         cout << "Mode : " << (useGpu ? "GPU" : "CPU") << endl;
     }
 
