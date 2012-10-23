@@ -34,7 +34,7 @@ namespace cv
 {
     namespace superres
     {
-        CV_INIT_ALGORITHM(FarnebackOpticalFlow, "DenseOpticalFlow.Farneback",
+        CV_INIT_ALGORITHM(Farneback, "DenseOpticalFlow.Farneback",
                           obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
                           obj.info()->addParam(obj, "numLevels", obj.numLevels);
                           obj.info()->addParam(obj, "winSize", obj.winSize);
@@ -43,7 +43,7 @@ namespace cv
                           obj.info()->addParam(obj, "polySigma", obj.polySigma);
                           obj.info()->addParam(obj, "flags", obj.flags));
 
-        CV_INIT_ALGORITHM(SimpleOpticalFlow, "DenseOpticalFlow.Simple",
+        CV_INIT_ALGORITHM(Simple, "DenseOpticalFlow.Simple",
                           obj.info()->addParam(obj, "layers", obj.layers);
                           obj.info()->addParam(obj, "averagingBlockSize", obj.averagingBlockSize);
                           obj.info()->addParam(obj, "maxFlow", obj.maxFlow);
@@ -58,7 +58,7 @@ namespace cv
                           obj.info()->addParam(obj, "upscaleSigmaColor", obj.upscaleSigmaColor);
                           obj.info()->addParam(obj, "speedUpThr", obj.speedUpThr));
 
-        CV_INIT_ALGORITHM(BroxOpticalFlow_GPU, "DenseOpticalFlow.Brox_GPU",
+        CV_INIT_ALGORITHM(Brox_GPU, "DenseOpticalFlow.Brox_GPU",
                           obj.info()->addParam(obj, "alpha", obj.alpha, false, 0, 0, "Flow smoothness");
                           obj.info()->addParam(obj, "gamma", obj.gamma, false, 0, 0, "Gradient constancy importance");
                           obj.info()->addParam(obj, "scaleFactor", obj.scaleFactor, false, 0, 0, "Pyramid scale factor");
@@ -66,12 +66,12 @@ namespace cv
                           obj.info()->addParam(obj, "outerIterations", obj.outerIterations, false, 0, 0, "Number of warping iterations (number of pyramid levels)");
                           obj.info()->addParam(obj, "solverIterations", obj.solverIterations, false, 0, 0, "Number of linear system solver iterations"));
 
-        CV_INIT_ALGORITHM(PyrLKOpticalFlow_GPU, "DenseOpticalFlow.PyrLK_GPU",
+        CV_INIT_ALGORITHM(PyrLK_GPU, "DenseOpticalFlow.PyrLK_GPU",
                           obj.info()->addParam(obj, "winSize", obj.winSize);
                           obj.info()->addParam(obj, "maxLevel", obj.maxLevel);
                           obj.info()->addParam(obj, "iterations", obj.iterations));
 
-        CV_INIT_ALGORITHM(FarnebackOpticalFlow_GPU, "DenseOpticalFlow.Farneback_GPU",
+        CV_INIT_ALGORITHM(Farneback_GPU, "DenseOpticalFlow.Farneback_GPU",
                           obj.info()->addParam(obj, "pyrScale", obj.pyrScale);
                           obj.info()->addParam(obj, "numLevels", obj.numLevels);
                           obj.info()->addParam(obj, "winSize", obj.winSize);
@@ -110,11 +110,11 @@ bool cv::superres::initModule_superres()
 {
     bool all = true;
 
-    all &= !FarnebackOpticalFlow_info_auto.name().empty();
-    all &= !SimpleOpticalFlow_info_auto.name().empty();
-    all &= !BroxOpticalFlow_GPU_info_auto.name().empty();
-    all &= !PyrLKOpticalFlow_GPU_info_auto.name().empty();
-    all &= !FarnebackOpticalFlow_GPU_info_auto.name().empty();
+    all &= !Farneback_info_auto.name().empty();
+    all &= !Simple_info_auto.name().empty();
+    all &= !Brox_GPU_info_auto.name().empty();
+    all &= !PyrLK_GPU_info_auto.name().empty();
+    all &= !Farneback_GPU_info_auto.name().empty();
 
     all &= !BTV_L1_info_auto.name().empty();
     all &= !BTV_L1_GPU_info_auto.name().empty();

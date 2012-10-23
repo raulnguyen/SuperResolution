@@ -212,7 +212,7 @@ cv::superres::BTV_L1_GPU_Base::BTV_L1_GPU_Base()
     btvKernelSize = 7;
     blurKernelSize = 5;
     blurSigma = 0.0;
-    opticalFlow = new FarnebackOpticalFlow_GPU;
+    opticalFlow = new Farneback_GPU;
 
     curBtvKernelSize = -1;
     curAlpha = -1.0;

@@ -24,7 +24,6 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "optical_flow.hpp"
-#include <opencv2/video/tracking.hpp>
 #include "input_array_utility.hpp"
 
 using namespace std;
@@ -37,9 +36,9 @@ void cv::superres::DenseOpticalFlow::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
-// FarnebackOpticalFlow
+// Farneback
 
-cv::superres::FarnebackOpticalFlow::FarnebackOpticalFlow()
+cv::superres::Farneback::Farneback()
 {
     pyrScale = 0.5;
     numLevels = 5;
@@ -50,7 +49,7 @@ cv::superres::FarnebackOpticalFlow::FarnebackOpticalFlow()
     flags = 0;
 }
 
-void cv::superres::FarnebackOpticalFlow::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+void cv::superres::Farneback::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
 {
     Mat frame0 = ::getMat(_frame0, buf[0]);
     Mat frame1 = ::getMat(_frame1, buf[1]);
@@ -82,12 +81,12 @@ void cv::superres::FarnebackOpticalFlow::calc(InputArray _frame0, InputArray _fr
     }
 }
 
-void cv::superres::FarnebackOpticalFlow::call(const Mat& input0, const Mat& input1, OutputArray dst)
+void cv::superres::Farneback::call(const Mat& input0, const Mat& input1, OutputArray dst)
 {
     calcOpticalFlowFarneback(input0, input1, dst, pyrScale, numLevels, winSize, numIters, polyN, polySigma, flags);
 }
 
-void cv::superres::FarnebackOpticalFlow::collectGarbage()
+void cv::superres::Farneback::collectGarbage()
 {
     for (int i = 0; i < 6; ++i)
         buf[i].release();
@@ -96,9 +95,9 @@ void cv::superres::FarnebackOpticalFlow::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
-// SimpleOpticalFlow
+// Simple
 
-cv::superres::SimpleOpticalFlow::SimpleOpticalFlow()
+cv::superres::Simple::Simple()
 {
     layers = 3;
     averagingBlockSize = 2;
@@ -115,7 +114,7 @@ cv::superres::SimpleOpticalFlow::SimpleOpticalFlow()
     speedUpThr = 10;
 }
 
-void cv::superres::SimpleOpticalFlow::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+void cv::superres::Simple::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
 {
     Mat frame0 = ::getMat(_frame0, buf[0]);
     Mat frame1 = ::getMat(_frame1, buf[1]);
@@ -147,7 +146,7 @@ void cv::superres::SimpleOpticalFlow::calc(InputArray _frame0, InputArray _frame
     }
 }
 
-void cv::superres::SimpleOpticalFlow::call(Mat input0, Mat input1, Mat& dst)
+void cv::superres::Simple::call(Mat input0, Mat input1, Mat& dst)
 {
     calcOpticalFlowSF(input0, input1, dst,
                       layers,
@@ -166,7 +165,7 @@ void cv::superres::SimpleOpticalFlow::call(Mat input0, Mat input1, Mat& dst)
 
 }
 
-void cv::superres::SimpleOpticalFlow::collectGarbage()
+void cv::superres::Simple::collectGarbage()
 {
     for (int i = 0; i < 6; ++i)
         buf[i].release();
@@ -175,9 +174,9 @@ void cv::superres::SimpleOpticalFlow::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
-// BroxOpticalFlow_GPU
+// Brox_GPU
 
-cv::superres::BroxOpticalFlow_GPU::BroxOpticalFlow_GPU() : alg(0.197, 50.0, 0.8, 10, 77, 10)
+cv::superres::Brox_GPU::Brox_GPU() : alg(0.197, 50.0, 0.8, 10, 77, 10)
 {
     alpha = alg.alpha;
     gamma = alg.gamma;
@@ -187,7 +186,7 @@ cv::superres::BroxOpticalFlow_GPU::BroxOpticalFlow_GPU() : alg(0.197, 50.0, 0.8,
     solverIterations = alg.solver_iterations;
 }
 
-void cv::superres::BroxOpticalFlow_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+void cv::superres::Brox_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
 {
     GpuMat frame0 = ::getGpuMat(_frame0, buf[0]);
     GpuMat frame1 = ::getGpuMat(_frame1, buf[1]);
@@ -219,7 +218,7 @@ void cv::superres::BroxOpticalFlow_GPU::calc(InputArray _frame0, InputArray _fra
     }
 }
 
-void cv::superres::BroxOpticalFlow_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
+void cv::superres::Brox_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
 {
     alg.alpha = alpha;
     alg.gamma = gamma;
@@ -230,7 +229,7 @@ void cv::superres::BroxOpticalFlow_GPU::call(const GpuMat& input0, const GpuMat&
     alg(input0, input1, dst1, dst2);
 }
 
-void cv::superres::BroxOpticalFlow_GPU::collectGarbage()
+void cv::superres::Brox_GPU::collectGarbage()
 {
     alg.buf.release();
     for (int i = 0; i < 6; ++i)
@@ -241,16 +240,16 @@ void cv::superres::BroxOpticalFlow_GPU::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
-// PyrLKOpticalFlow_GPU
+// PyrLK_GPU
 
-cv::superres::PyrLKOpticalFlow_GPU::PyrLKOpticalFlow_GPU()
+cv::superres::PyrLK_GPU::PyrLK_GPU()
 {
     winSize = alg.winSize.width;
     maxLevel = alg.maxLevel;
     iterations = alg.iters;
 }
 
-void cv::superres::PyrLKOpticalFlow_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+void cv::superres::PyrLK_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
 {
     GpuMat frame0 = ::getGpuMat(_frame0, buf[0]);
     GpuMat frame1 = ::getGpuMat(_frame1, buf[1]);
@@ -282,7 +281,7 @@ void cv::superres::PyrLKOpticalFlow_GPU::calc(InputArray _frame0, InputArray _fr
     }
 }
 
-void cv::superres::PyrLKOpticalFlow_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
+void cv::superres::PyrLK_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
 {
     alg.winSize.width = winSize;
     alg.winSize.height = winSize;
@@ -291,7 +290,7 @@ void cv::superres::PyrLKOpticalFlow_GPU::call(const GpuMat& input0, const GpuMat
     alg.dense(input0, input1, dst1, dst2);
 }
 
-void cv::superres::PyrLKOpticalFlow_GPU::collectGarbage()
+void cv::superres::PyrLK_GPU::collectGarbage()
 {
     alg.releaseMemory();
     for (int i = 0; i < 6; ++i)
@@ -302,9 +301,9 @@ void cv::superres::PyrLKOpticalFlow_GPU::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
-// FarnebackOpticalFlow_GPU
+// Farneback_GPU
 
-cv::superres::FarnebackOpticalFlow_GPU::FarnebackOpticalFlow_GPU()
+cv::superres::Farneback_GPU::Farneback_GPU()
 {
     pyrScale = alg.pyrScale;
     numLevels = alg.numLevels;
@@ -315,7 +314,7 @@ cv::superres::FarnebackOpticalFlow_GPU::FarnebackOpticalFlow_GPU()
     flags = alg.flags;
 }
 
-void cv::superres::FarnebackOpticalFlow_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+void cv::superres::Farneback_GPU::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
 {
     GpuMat frame0 = ::getGpuMat(_frame0, buf[0]);
     GpuMat frame1 = ::getGpuMat(_frame1, buf[1]);
@@ -347,7 +346,7 @@ void cv::superres::FarnebackOpticalFlow_GPU::calc(InputArray _frame0, InputArray
     }
 }
 
-void cv::superres::FarnebackOpticalFlow_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
+void cv::superres::Farneback_GPU::call(const GpuMat& input0, const GpuMat& input1, GpuMat& dst1, GpuMat& dst2)
 {
     alg.pyrScale = pyrScale;
     alg.numLevels = numLevels;
@@ -359,7 +358,7 @@ void cv::superres::FarnebackOpticalFlow_GPU::call(const GpuMat& input0, const Gp
     alg(input0, input1, dst1, dst2);
 }
 
-void cv::superres::FarnebackOpticalFlow_GPU::collectGarbage()
+void cv::superres::Farneback_GPU::collectGarbage()
 {
     alg.releaseMemory();
     for (int i = 0; i < 6; ++i)

@@ -30,6 +30,7 @@
 
 #include <vector>
 #include <opencv2/core/core.hpp>
+#include <opencv2/video/tracking.hpp>
 #include <opencv2/gpu/gpu.hpp>
 #include "super_resolution_export.h"
 
@@ -44,12 +45,12 @@ namespace cv
             virtual void collectGarbage();
         };
 
-        class SUPER_RESOLUTION_EXPORT FarnebackOpticalFlow : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT Farneback : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            FarnebackOpticalFlow();
+            Farneback();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
             void collectGarbage();
@@ -70,12 +71,12 @@ namespace cv
             std::vector<Mat> flows;
         };
 
-        class SUPER_RESOLUTION_EXPORT SimpleOpticalFlow : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT Simple : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            SimpleOpticalFlow();
+            Simple();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
             void collectGarbage();
@@ -102,12 +103,12 @@ namespace cv
             std::vector<Mat> flows;
         };
 
-        class SUPER_RESOLUTION_EXPORT BroxOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT Brox_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            BroxOpticalFlow_GPU();
+            Brox_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
             void collectGarbage();
@@ -127,12 +128,12 @@ namespace cv
             gpu::GpuMat u, v, flow;
         };
 
-        class SUPER_RESOLUTION_EXPORT PyrLKOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT PyrLK_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            PyrLKOpticalFlow_GPU();
+            PyrLK_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
             void collectGarbage();
@@ -149,12 +150,12 @@ namespace cv
             gpu::GpuMat u, v, flow;
         };
 
-        class SUPER_RESOLUTION_EXPORT FarnebackOpticalFlow_GPU : public DenseOpticalFlow
+        class SUPER_RESOLUTION_EXPORT Farneback_GPU : public DenseOpticalFlow
         {
         public:
             AlgorithmInfo* info() const;
 
-            FarnebackOpticalFlow_GPU();
+            Farneback_GPU();
 
             void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
             void collectGarbage();

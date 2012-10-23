@@ -284,7 +284,7 @@ cv::superres::BTV_L1_Base::BTV_L1_Base()
     btvKernelSize = 7;
     blurKernelSize = 5;
     blurSigma = 0.0;
-    opticalFlow = new FarnebackOpticalFlow;
+    opticalFlow = new Farneback;
 
     curBtvKernelSize = -1;
     curAlpha = -1.0;
