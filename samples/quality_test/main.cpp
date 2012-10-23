@@ -125,9 +125,12 @@ namespace
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ i image | boy.png | Input image }"
-        "{ s scale | 4       | Scale factor }"
-        "{ h help  |         | Print help message }"
+        "{ @0           | boy.png   | Input image }"
+        "{ s scale      | 4         | Scale factor }"
+        "{ i iterations | 180       | Iteration count }"
+        "{ c count      | 9         | Degraded images count }"
+        "{ f opt-flow   | farneback | Optical flow algorithm (farneback, simple, brox, pyrlk) }"
+        "{ h help       |           | Print help message }"
     );
 
     if (cmd.has("help"))
@@ -137,8 +140,33 @@ int main(int argc, const char* argv[])
         return 0;
     }
 
-    const string imageFileName = cmd.get<string>("image");
+    const string imageFileName = cmd.get<string>(0);
     const int scale = cmd.get<int>("scale");
+    const int iterations = cmd.get<int>("iterations");
+    const int count = cmd.get<int>("count");
+    const string optFlow = cmd.get<string>("opt-flow");
+
+    if (!cmd.check())
+    {
+        cmd.printErrors();
+        return -1;
+    }
+
+    Ptr<DenseOpticalFlow> optFlowAlg;
+    if (optFlow == "farneback")
+        optFlowAlg = new Farneback;
+    else if (optFlow == "simple")
+        optFlowAlg = new Simple;
+    else if (optFlow == "brox")
+        optFlowAlg = new Brox_GPU;
+    else if (optFlow == "pyrlk")
+        optFlowAlg = new PyrLK_GPU;
+    else
+    {
+        cerr << "Incorrect Optical Flow algorithm - " << optFlow << endl;
+        cmd.printMessage();
+        return -1;
+    }
 
     Mat gold = imread(imageFileName, IMREAD_GRAYSCALE);
     if (gold.empty())
@@ -150,20 +178,39 @@ int main(int argc, const char* argv[])
     if (gold.rows % scale != 0 || gold.cols % scale != 0)
         gold = gold(Rect(0, 0, (gold.cols / scale) * scale, (gold.rows / scale) * scale));
 
+    cout << endl;
+    cout << "==============================" << endl;
+    cout << "Parameters" << endl;
+    cout << "==============================" << endl;
+    cout << endl;
+
+    cout << "Input Frame     : " << imageFileName << " " << gold.size() << endl;
+    cout << "Scale Factor    : " << scale << endl;
+    cout << "Iteration Count : " << iterations << endl;
+    cout << "Frames          : " << count << endl;
+    cout << "Optical Flow    : " << optFlow << endl;
+
     RNG rng(12345678);
 
-    const int degImagesCount = 9;
-    vector<Mat> degImages(degImagesCount);
+    vector<Mat> degImages(count);
 
     degImages[0] = createDegradedImage(gold, scale, rng, false);
-    for (int i = 1; i < degImagesCount; ++i)
+    for (int i = 1; i < count; ++i)
         degImages[i] = createDegradedImage(gold, scale, rng);
 
     BTV_L1_Base alg;
     alg.scale = scale;
+    alg.iterations = iterations;
+    alg.opticalFlow = optFlowAlg;
 
     Mat highResImage;
     alg.process(degImages, highResImage);
+
+    cout << endl;
+    cout << "==============================" << endl;
+    cout << "Results" << endl;
+    cout << "==============================" << endl;
+    cout << endl;
 
     Rect inner(alg.btvKernelSize, alg.btvKernelSize, gold.cols - 2 * alg.btvKernelSize, gold.rows - 2 * alg.btvKernelSize);
     cout << "PSNR : " << getPSNR(gold(inner), highResImage) << " dB" << endl;
