@@ -103,6 +103,34 @@ namespace cv
             std::vector<Mat> flows;
         };
 
+        class SUPER_RESOLUTION_EXPORT Dual_TVL1 : public DenseOpticalFlow
+        {
+        public:
+            AlgorithmInfo* info() const;
+
+            Dual_TVL1();
+
+            void calc(InputArray frame0, InputArray frame1, OutputArray flow1, OutputArray flow2);
+            void collectGarbage();
+
+            double tau;
+            double lambda;
+            double theta;
+            int    nscales;
+            int    warps;
+            double epsilon;
+            int iterations;
+            bool useInitialFlow;
+
+        private:
+            void call(const Mat& input0, const Mat& input1, OutputArray dst);
+
+            Mat buf[6];
+            Mat flow;
+            std::vector<Mat> flows;
+            OpticalFlowDual_TVL1 alg;
+        };
+
         class SUPER_RESOLUTION_EXPORT Brox_GPU : public DenseOpticalFlow
         {
         public:

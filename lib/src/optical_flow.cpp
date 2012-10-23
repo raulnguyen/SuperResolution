@@ -174,6 +174,76 @@ void cv::superres::Simple::collectGarbage()
 }
 
 ///////////////////////////////////////////////////////////////////
+// Dual_TVL1
+
+cv::superres::Dual_TVL1::Dual_TVL1()
+{
+    tau = alg.tau;
+    lambda = alg.lambda;
+    theta = alg.theta;
+    nscales = alg.nscales;
+    warps = alg.warps;
+    epsilon = alg.epsilon;
+    iterations = alg.iterations;
+    useInitialFlow = alg.useInitialFlow;
+}
+
+void cv::superres::Dual_TVL1::calc(InputArray _frame0, InputArray _frame1, OutputArray _flow1, OutputArray _flow2)
+{
+    Mat frame0 = ::getMat(_frame0, buf[0]);
+    Mat frame1 = ::getMat(_frame1, buf[1]);
+
+    CV_DbgAssert( frame1.type() == frame0.type() );
+    CV_DbgAssert( frame1.size() == frame0.size() );
+
+    Mat input0 = ::convertToType(frame0, CV_8U, 1, buf[2], buf[3]);
+    Mat input1 = ::convertToType(frame1, CV_8U, 1, buf[4], buf[5]);
+
+    if (!_flow2.needed() && _flow1.kind() != _InputArray::GPU_MAT)
+    {
+        call(input0, input1, _flow1);
+        return;
+    }
+
+    call(input0, input1, flow);
+
+    if (!_flow2.needed())
+    {
+        ::copy(_flow1, flow);
+    }
+    else
+    {
+        split(flow, flows);
+
+        ::copy(_flow1, flows[0]);
+        ::copy(_flow2, flows[1]);
+    }
+}
+
+void cv::superres::Dual_TVL1::call(const Mat& input0, const Mat& input1, OutputArray dst)
+{
+    alg.tau = tau;
+    alg.lambda = lambda;
+    alg.theta = theta;
+    alg.nscales = nscales;
+    alg.warps = warps;
+    alg.epsilon = epsilon;
+    alg.iterations = iterations;
+    alg.useInitialFlow = useInitialFlow;
+
+    alg(input0, input1, dst);
+}
+
+void cv::superres::Dual_TVL1::collectGarbage()
+{
+    for (int i = 0; i < 6; ++i)
+        buf[i].release();
+    flow.release();
+    flows.clear();
+    alg.collectGarbage();
+}
+
+///////////////////////////////////////////////////////////////////
 // Brox_GPU
 
 cv::superres::Brox_GPU::Brox_GPU() : alg(0.197, 50.0, 0.8, 10, 77, 10)

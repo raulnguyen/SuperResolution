@@ -129,7 +129,7 @@ int main(int argc, const char* argv[])
         "{ s scale      | 4         | Scale factor }"
         "{ i iterations | 180       | Iteration count }"
         "{ c count      | 9         | Degraded images count }"
-        "{ f opt-flow   | farneback | Optical flow algorithm (farneback, simple, brox, pyrlk) }"
+        "{ f opt-flow   | farneback | Optical flow algorithm (farneback, simple, tvl1, brox, pyrlk) }"
         "{ h help       |           | Print help message }"
     );
 
@@ -157,6 +157,8 @@ int main(int argc, const char* argv[])
         optFlowAlg = new Farneback;
     else if (optFlow == "simple")
         optFlowAlg = new Simple;
+    else if (optFlow == "tvl1")
+        optFlowAlg = new Dual_TVL1;
     else if (optFlow == "brox")
         optFlowAlg = new Brox_GPU;
     else if (optFlow == "pyrlk")
