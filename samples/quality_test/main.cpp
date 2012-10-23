@@ -40,41 +40,38 @@ using namespace cv::videostab;
 
 namespace
 {
-    class GrayScaleFrameSource : public IFrameSource
+    class AllignedFrameSource : public IFrameSource
     {
     public:
-        GrayScaleFrameSource(const Ptr<IFrameSource>& base, int scale);
+        AllignedFrameSource(const Ptr<IFrameSource>& base, int scale);
 
         void reset();
         Mat nextFrame();
 
     private:
-        Mat gray;
         Ptr<IFrameSource> base;
         const int scale;
     };
 
-    GrayScaleFrameSource::GrayScaleFrameSource(const Ptr<IFrameSource>& base, int scale) :
+    AllignedFrameSource::AllignedFrameSource(const Ptr<IFrameSource>& base, int scale) :
         base(base), scale(scale)
     {
         CV_Assert( !base.empty() );
     }
 
-    void GrayScaleFrameSource::reset()
+    void AllignedFrameSource::reset()
     {
         base->reset();
     }
 
-    Mat GrayScaleFrameSource::nextFrame()
+    Mat AllignedFrameSource::nextFrame()
     {
         Mat frame = base->nextFrame();
 
         if (frame.rows % scale != 0 || frame.cols % scale != 0)
             frame = frame(Rect(0, 0, (frame.cols / scale) * scale, (frame.rows / scale) * scale));
 
-        cvtColor(frame, gray, COLOR_BGR2GRAY);
-
-        return gray;
+        return frame;
     }
 
     class DegradeFrameSource : public IFrameSource
@@ -208,9 +205,9 @@ int main(int argc, const char* argv[])
     superRes->set("temporalAreaRadius", temporalAreaRadius);
     superRes->set("opticalFlow", optFlowAlg);
 
-    Ptr<IFrameSource> goldSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale));
-    Ptr<IFrameSource> lowResSource(new DegradeFrameSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale), scale));
-    Ptr<IFrameSource> lowResSource2(new DegradeFrameSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale), scale));
+    Ptr<IFrameSource> goldSource(new AllignedFrameSource(new VideoFileSource(inputVideoName), scale));
+    Ptr<IFrameSource> lowResSource(new DegradeFrameSource(new AllignedFrameSource(new VideoFileSource(inputVideoName), scale), scale));
+    Ptr<IFrameSource> lowResSource2(new DegradeFrameSource(new AllignedFrameSource(new VideoFileSource(inputVideoName), scale), scale));
 
     // skip first frame, it is usually corrupted
     {
