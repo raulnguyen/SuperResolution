@@ -6,3 +6,4 @@
 #
 
 add_subdirectory(video)
+add_subdirectory(quality_test)
