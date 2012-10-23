@@ -239,7 +239,7 @@ int main(int argc, const char* argv[])
     cout << "|   Ind    |  SuperRes PSNR  |   BiCubic PSNR   |" << endl;
     cout << "|----------|-----------------|------------------|" << endl;
 
-    for (;; ++count)
+    for (;;)
     {
         Mat goldFrame = goldSource->nextFrame();
         if (goldFrame.empty())
@@ -260,6 +260,7 @@ int main(int argc, const char* argv[])
 
         srAvgPSNR += srPSNR;
         bcAvgPSNR += bcPSNR;
+        ++count;
 
         cout << "|  [" << setw(4) << count << "]  |      " << fixed << setprecision(2) << srPSNR << "      |      " << fixed << setprecision(2) << bcPSNR << "       |" << endl;
 
