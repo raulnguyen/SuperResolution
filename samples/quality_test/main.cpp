@@ -25,6 +25,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <vector>
 #include <opencv2/core/core.hpp>
@@ -35,9 +36,110 @@
 using namespace std;
 using namespace cv;
 using namespace cv::superres;
+using namespace cv::videostab;
 
 namespace
 {
+    class GrayScaleFrameSource : public IFrameSource
+    {
+    public:
+        GrayScaleFrameSource(const Ptr<IFrameSource>& base, int scale);
+
+        void reset();
+        Mat nextFrame();
+
+    private:
+        Mat gray;
+        Ptr<IFrameSource> base;
+        const int scale;
+    };
+
+    GrayScaleFrameSource::GrayScaleFrameSource(const Ptr<IFrameSource>& base, int scale) :
+        base(base), scale(scale)
+    {
+        CV_Assert( !base.empty() );
+    }
+
+    void GrayScaleFrameSource::reset()
+    {
+        base->reset();
+    }
+
+    Mat GrayScaleFrameSource::nextFrame()
+    {
+        Mat frame = base->nextFrame();
+
+        if (frame.rows % scale != 0 || frame.cols % scale != 0)
+            frame = frame(Rect(0, 0, (frame.cols / scale) * scale, (frame.rows / scale) * scale));
+
+        cvtColor(frame, gray, COLOR_BGR2GRAY);
+
+        return gray;
+    }
+
+    class DegradeFrameSource : public IFrameSource
+    {
+    public:
+        DegradeFrameSource(const Ptr<IFrameSource>& base, int scale);
+
+        void reset();
+        Mat nextFrame();
+
+    private:
+        Mat blurred;
+        Mat deg;
+        Ptr<IFrameSource> base;
+        const double iscale;
+    };
+
+    DegradeFrameSource::DegradeFrameSource(const Ptr<IFrameSource>& base, int scale) :
+        base(base), iscale(1.0 / scale)
+    {
+        CV_Assert( !base.empty() );
+    }
+
+    void DegradeFrameSource::reset()
+    {
+        base->reset();
+    }
+
+    void addGaussNoise(Mat& image, double sigma)
+    {
+        Mat noise(image.size(), CV_32FC(image.channels()));
+        theRNG().fill(noise, RNG::NORMAL, 0.0, sigma);
+
+        addWeighted(image, 1.0, noise, 1.0, 0.0, image, image.depth());
+    }
+
+    void addSpikeNoise(Mat& image, int frequency)
+    {
+        Mat_<uchar> mask(image.size(), 0);
+
+        for (int y = 0; y < mask.rows; ++y)
+        {
+            for (int x = 0; x < mask.cols; ++x)
+            {
+                if (theRNG().uniform(0, frequency) < 1)
+                    mask(y, x) = 255;
+            }
+        }
+
+        image.setTo(Scalar::all(255), mask);
+    }
+
+    Mat DegradeFrameSource::nextFrame()
+    {
+        Mat frame = base->nextFrame();
+
+        GaussianBlur(frame, blurred, Size(5, 5), 0);
+        resize(blurred, deg, Size(), iscale, iscale, INTER_NEAREST);
+
+        addGaussNoise(deg, 10.0);
+        addSpikeNoise(deg, 500);
+
+        return deg;
+    }
+
     double getPSNR(const Mat& src1, const Mat& src2)
     {
         CV_Assert( src1.type() == CV_8UC1 );
@@ -61,65 +163,6 @@ namespace
 
         return 10.0 * log10(255 * 255 / mse);
     }
-
-    void addGaussNoise(Mat& image, double sigma, RNG& rng)
-    {
-        Mat_<float> noise(image.size());
-        rng.fill(noise, RNG::NORMAL, 0.0, sigma);
-
-        addWeighted(image, 1.0, noise, 1.0, 0.0, image, image.depth());
-    }
-
-    void addSpikeNoise(Mat& image, int frequency, RNG& rng)
-    {
-        Mat_<uchar> mask(image.size(), 0);
-
-        for (int y = 0; y < mask.rows; ++y)
-        {
-            for (int x = 0; x < mask.cols; ++x)
-            {
-                if (rng.uniform(0, frequency) < 1)
-                    mask(y, x) = 255;
-            }
-        }
-
-        image.setTo(Scalar::all(255), mask);
-    }
-
-    Mat createDegradedImage(const Mat& src, int scale, RNG& rng, bool doShift = true)
-    {
-        const double dscale = scale;
-        const double iscale = 1.0 / dscale;
-
-        Mat shifted;
-        if (!doShift)
-            shifted = src;
-        else
-        {
-            Point2d move;
-            move.x = rng.uniform(-dscale, dscale);
-            move.y = rng.uniform(-dscale, dscale);
-
-            const double theta = rng.uniform(-CV_PI / 30, CV_PI / 30);
-
-            Mat_<float> M(2, 3);
-            M << cos(theta), -sin(theta), move.x,
-                 sin(theta),  cos(theta), move.y;
-
-            warpAffine(src, shifted, M, src.size(), INTER_NEAREST);
-        }
-
-        Mat blurred;
-        GaussianBlur(shifted, blurred, Size(5, 5), 0);
-
-        Mat deg;
-        resize(blurred, deg, Size(), iscale, iscale, INTER_NEAREST);
-
-        addGaussNoise(deg, 10.0, rng);
-        addSpikeNoise(deg, 500, rng);
-
-        return deg;
-    }
 }
 
 int main(int argc, const char* argv[])
@@ -128,8 +171,9 @@ int main(int argc, const char* argv[])
         "{ @0           | boy.png   | Input image }"
         "{ s scale      | 4         | Scale factor }"
         "{ i iterations | 180       | Iteration count }"
-        "{ c count      | 9         | Degraded images count }"
+        "{ t temporal   | 4         | Radius of the temporal search area }"
         "{ f opt-flow   | farneback | Optical flow algorithm (farneback, simple, brox, pyrlk) }"
+        "{ gpu          |           | Use GPU }"
         "{ h help       |           | Print help message }"
     );
 
@@ -140,11 +184,12 @@ int main(int argc, const char* argv[])
         return 0;
     }
 
-    const string imageFileName = cmd.get<string>(0);
+    const string inputVideoName = cmd.get<string>(0);
     const int scale = cmd.get<int>("scale");
     const int iterations = cmd.get<int>("iterations");
-    const int count = cmd.get<int>("count");
+    const int temporalAreaRadius = cmd.get<int>("temporal");
     const string optFlow = cmd.get<string>("opt-flow");
+    const bool useGpu = cmd.has("gpu");
 
     if (!cmd.check())
     {
@@ -154,7 +199,12 @@ int main(int argc, const char* argv[])
 
     Ptr<DenseOpticalFlow> optFlowAlg;
     if (optFlow == "farneback")
-        optFlowAlg = new Farneback;
+    {
+        if (useGpu)
+            optFlowAlg = new Farneback_GPU;
+        else
+            optFlowAlg = new Farneback;
+    }
     else if (optFlow == "simple")
         optFlowAlg = new Simple;
     else if (optFlow == "brox")
@@ -168,57 +218,94 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    Mat gold = imread(imageFileName, IMREAD_GRAYSCALE);
-    if (gold.empty())
+    Ptr<SuperResolution> superRes;
+    if (useGpu)
+        superRes = new BTV_L1_GPU;
+    else
+        superRes = new BTV_L1;
+
+    const int btvKernelSize = superRes->getInt("btvKernelSize");
+    Rect inner;
+
+    superRes->set("scale", scale);
+    superRes->set("iterations", iterations);
+    superRes->set("temporalAreaRadius", temporalAreaRadius);
+    superRes->set("opticalFlow", optFlowAlg);
+
+    Ptr<IFrameSource> goldSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale));
+    Ptr<IFrameSource> lowResSource(new DegradeFrameSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale), scale));
+    Ptr<IFrameSource> lowResSource2(new DegradeFrameSource(new GrayScaleFrameSource(new VideoFileSource(inputVideoName), scale), scale));
+
+    // skip first frame, it is usually corrupted
     {
-        cerr << "Can't open image " << imageFileName << endl;
-        return -1;
+        Mat frame = lowResSource->nextFrame();
+        frame = lowResSource2->nextFrame();
+        frame = goldSource->nextFrame();
+
+        inner = Rect(btvKernelSize, btvKernelSize, frame.cols - 2 * btvKernelSize, frame.rows - 2 * btvKernelSize);
+
+        cout << "Input             : " << inputVideoName << " " << frame.size() << endl;
+        cout << "Scale factor      : " << scale << endl;
+        cout << "Iterations        : " << iterations << endl;
+        cout << "Frames to process : " << temporalAreaRadius * 2 + 1 << endl;
+        cout << "Optical Flow      : " << optFlow << endl;
+        cout << "Mode              : " << (useGpu ? "GPU" : "CPU") << endl;
     }
 
-    if (gold.rows % scale != 0 || gold.cols % scale != 0)
-        gold = gold(Rect(0, 0, (gold.cols / scale) * scale, (gold.rows / scale) * scale));
+    superRes->setFrameSource(lowResSource);
 
-    cout << endl;
-    cout << "==============================" << endl;
-    cout << "Parameters" << endl;
-    cout << "==============================" << endl;
-    cout << endl;
+    Mat biCubicFrame;
 
-    cout << "Input Frame     : " << imageFileName << " " << gold.size() << endl;
-    cout << "Scale Factor    : " << scale << endl;
-    cout << "Iteration Count : " << iterations << endl;
-    cout << "Frames          : " << count << endl;
-    cout << "Optical Flow    : " << optFlow << endl;
+    double srAvgPSNR = 0.0;
+    double bcAvgPSNR = 0.0;
+    int count = 0;
 
-    RNG rng(12345678);
+    cout << "-------------------------------------------------" << endl;
+    cout << "|   Ind    |  SuperRes PSNR  |   BiCubic PSNR   |" << endl;
+    cout << "|----------|-----------------|------------------|" << endl;
 
-    vector<Mat> degImages(count);
+    for (;; ++count)
+    {
+        Mat goldFrame = goldSource->nextFrame();
+        if (goldFrame.empty())
+            break;
 
-    degImages[0] = createDegradedImage(gold, scale, rng, false);
-    for (int i = 1; i < count; ++i)
-        degImages[i] = createDegradedImage(gold, scale, rng);
+        Mat lowResFrame = lowResSource2->nextFrame();
+        if (lowResFrame.empty())
+            break;
 
-    BTV_L1_Base alg;
-    alg.scale = scale;
-    alg.iterations = iterations;
-    alg.opticalFlow = optFlowAlg;
+        Mat superResFrame = superRes->nextFrame();
+        if (superResFrame.empty())
+            break;
 
-    Mat highResImage;
-    alg.process(degImages, highResImage);
+        resize(lowResFrame, biCubicFrame, Size(), scale, scale, INTER_CUBIC);
 
-    cout << endl;
-    cout << "==============================" << endl;
-    cout << "Results" << endl;
-    cout << "==============================" << endl;
-    cout << endl;
+        const double srPSNR = getPSNR(goldFrame(inner), superResFrame);
+        const double bcPSNR = getPSNR(goldFrame, biCubicFrame);
 
-    Rect inner(alg.btvKernelSize, alg.btvKernelSize, gold.cols - 2 * alg.btvKernelSize, gold.rows - 2 * alg.btvKernelSize);
-    cout << "PSNR : " << getPSNR(gold(inner), highResImage) << " dB" << endl;
+        srAvgPSNR += srPSNR;
+        bcAvgPSNR += bcPSNR;
 
-    imshow("Gold", gold);
-    imshow("Super Resolution", highResImage);
+        cout << "|  [" << setw(4) << count << "]  |      " << fixed << setprecision(2) << srPSNR << "      |      " << fixed << setprecision(2) << bcPSNR << "       |" << endl;
 
-    waitKey();
+        imshow("Gold", goldFrame);
+        imshow("Low Res Frame", lowResFrame);
+        imshow("Super Resolution", superResFrame);
+        imshow("Bi Cubic", biCubicFrame);
+
+        if (waitKey(1000) > 0)
+            break;
+    }
+
+    cout << "-------------------------------------------------" << endl;
+
+    destroyAllWindows();
+
+    srAvgPSNR /= count;
+    bcAvgPSNR /= count;
+
+    cout << "Super Resolution Avg PSNR : " << srAvgPSNR << " dB" << endl;
+    cout << "Bi-Cubic Resize  AVG PSNR : " << bcAvgPSNR << " dB" << endl;
 
     return 0;
 }

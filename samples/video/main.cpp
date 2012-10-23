@@ -69,8 +69,8 @@ int main(int argc, const char* argv[])
     const int scale = cmd.get<int>("scale");
     const int iterations = cmd.get<int>("iterations");
     const int temporalAreaRadius = cmd.get<int>("temporal");
-    const bool useGpu = cmd.has("gpu");
     const string optFlow = cmd.get<string>("opt-flow");
+    const bool useGpu = cmd.has("gpu");
 
     if (!cmd.check())
     {
@@ -114,7 +114,7 @@ int main(int argc, const char* argv[])
     // skip first frame, it is usually corrupted
     {
         Mat frame = frameSource->nextFrame();
-        cout << "Input size        : " << frame.cols << 'x' << frame.rows << endl;
+        cout << "Input             : " << inputVideoName << " " << frame.size() << endl;
         cout << "Scale factor      : " << scale << endl;
         cout << "Iterations        : " << iterations << endl;
         cout << "Frames to process : " << temporalAreaRadius * 2 + 1 << endl;
