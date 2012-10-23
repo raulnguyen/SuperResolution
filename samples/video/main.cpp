@@ -49,19 +49,14 @@ using namespace cv::videostab;
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ v video      | text.avi | Input video }"
-        "{ s scale      | 4        | Scale factor }"
-        "{ i iterations | 180      | Iteration count }"
-        "{ t temporal   | 4        | Radius of the temporal search area }"
-        "{ gpu          |          | Use GPU }"
-        "{ h help       |          | Print help message }"
+        "{ @0           | text.avi  | Input video }"
+        "{ s scale      | 4         | Scale factor }"
+        "{ i iterations | 180       | Iteration count }"
+        "{ t temporal   | 4         | Radius of the temporal search area }"
+        "{ f opt-flow   | farneback | Optical flow algorithm (farneback, simple, brox, pyrlk) }"
+        "{ gpu          |           | Use GPU }"
+        "{ h help       |           | Print help message }"
     );
-
-    if (!cmd.check())
-    {
-        cmd.printErrors();
-        return -1;
-    }
 
     if (cmd.has("help"))
     {
@@ -70,11 +65,39 @@ int main(int argc, const char* argv[])
         return 0;
     }
 
-    const string inputVideoName = cmd.get<string>("video");
+    const string inputVideoName = cmd.get<string>(0);
     const int scale = cmd.get<int>("scale");
     const int iterations = cmd.get<int>("iterations");
     const int temporalAreaRadius = cmd.get<int>("temporal");
     const bool useGpu = cmd.has("gpu");
+    const string optFlow = cmd.get<string>("opt-flow");
+
+    if (!cmd.check())
+    {
+        cmd.printErrors();
+        return -1;
+    }
+
+    Ptr<DenseOpticalFlow> optFlowAlg;
+    if (optFlow == "farneback")
+    {
+        if (useGpu)
+            optFlowAlg = new Farneback_GPU;
+        else
+            optFlowAlg = new Farneback;
+    }
+    else if (optFlow == "simple")
+        optFlowAlg = new Simple;
+    else if (optFlow == "brox")
+        optFlowAlg = new Brox_GPU;
+    else if (optFlow == "pyrlk")
+        optFlowAlg = new PyrLK_GPU;
+    else
+    {
+        cerr << "Incorrect Optical Flow algorithm - " << optFlow << endl;
+        cmd.printMessage();
+        return -1;
+    }
 
     Ptr<SuperResolution> superRes;
     if (useGpu)
@@ -85,6 +108,7 @@ int main(int argc, const char* argv[])
     superRes->set("scale", scale);
     superRes->set("iterations", iterations);
     superRes->set("temporalAreaRadius", temporalAreaRadius);
+    superRes->set("opticalFlow", optFlowAlg);
 
     Ptr<IFrameSource> frameSource(new VideoFileSource(inputVideoName));
     // skip first frame, it is usually corrupted
@@ -94,7 +118,8 @@ int main(int argc, const char* argv[])
         cout << "Scale factor      : " << scale << endl;
         cout << "Iterations        : " << iterations << endl;
         cout << "Frames to process : " << temporalAreaRadius * 2 + 1 << endl;
-        cout << "Mode : " << (useGpu ? "GPU" : "CPU") << endl;
+        cout << "Optical Flow      : " << optFlow << endl;
+        cout << "Mode              : " << (useGpu ? "GPU" : "CPU") << endl;
     }
 
     superRes->setFrameSource(frameSource);
