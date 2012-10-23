@@ -139,30 +139,6 @@ namespace
 
         return deg;
     }
-
-    double getPSNR(const Mat& src1, const Mat& src2)
-    {
-        CV_Assert( src1.type() == CV_8UC1 );
-        CV_Assert( src2.size() == src1.size() );
-        CV_Assert( src2.type() == src1.type() );
-
-        double sse = 0.0;
-        for (int y = 0; y < src1.rows; ++y)
-        {
-            const uchar* src1Row = src1.ptr(y);
-            const uchar* src2Row = src2.ptr(y);
-
-            for (int x = 0; x < src1.cols; ++x)
-                sse += (src1Row[x] - src2Row[x]) * (src1Row[x] - src2Row[x]);
-        }
-
-        if (sse == 0.0)
-            return 0;
-
-        const double mse = sse / src1.size().area();
-
-        return 10.0 * log10(255 * 255 / mse);
-    }
 }
 
 int main(int argc, const char* argv[])
@@ -280,8 +256,8 @@ int main(int argc, const char* argv[])
 
         resize(lowResFrame, biCubicFrame, Size(), scale, scale, INTER_CUBIC);
 
-        const double srPSNR = getPSNR(goldFrame(inner), superResFrame);
-        const double bcPSNR = getPSNR(goldFrame, biCubicFrame);
+        const double srPSNR = PSNR(goldFrame(inner), superResFrame);
+        const double bcPSNR = PSNR(goldFrame, biCubicFrame);
 
         srAvgPSNR += srPSNR;
         bcAvgPSNR += bcPSNR;
