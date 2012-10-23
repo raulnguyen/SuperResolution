@@ -168,7 +168,7 @@ namespace
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ @0           | boy.png   | Input image }"
+        "{ @0           | car.avi   | Input video }"
         "{ s scale      | 4         | Scale factor }"
         "{ i iterations | 180       | Iteration count }"
         "{ t temporal   | 4         | Radius of the temporal search area }"
