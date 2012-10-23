@@ -49,20 +49,24 @@ using namespace cv::videostab;
 int main(int argc, const char* argv[])
 {
     CommandLineParser cmd(argc, argv,
-        "{ v   | video      | text.avi | Input video }"
-        "{ s   | scale      | 4        | Scale factor }"
-        "{ i   | iterations | 180      | Iteration count }"
-        "{ t   | temporal   | 4        | Radius of the temporal search area }"
-        "{ gpu | gpu        | false    | Use GPU }"
-        "{ h   | help       | false    | Print help message }"
+        "{ v video      | text.avi | Input video }"
+        "{ s scale      | 4        | Scale factor }"
+        "{ i iterations | 180      | Iteration count }"
+        "{ t temporal   | 4        | Radius of the temporal search area }"
+        "{ gpu          |          | Use GPU }"
+        "{ h help       |          | Print help message }"
     );
 
-    if (cmd.get<bool>("help"))
+    if (!cmd.check())
     {
-        cout << "This sample demonstrates Super Resolution algorithms for video sequence" << endl;
-        cout << "Usage : super_resolution_video [Options]" << endl;
-        cout << "Avaible options:" << endl;
-        cmd.printParams();
+        cmd.printErrors();
+        return -1;
+    }
+
+    if (cmd.has("help"))
+    {
+        cmd.about("This sample demonstrates Super Resolution algorithms for video sequence");
+        cmd.printMessage();
         return 0;
     }
 
@@ -70,7 +74,7 @@ int main(int argc, const char* argv[])
     const int scale = cmd.get<int>("scale");
     const int iterations = cmd.get<int>("iterations");
     const int temporalAreaRadius = cmd.get<int>("temporal");
-    const bool useGpu = cmd.get<bool>("gpu");
+    const bool useGpu = cmd.has("gpu");
 
     Ptr<SuperResolution> superRes;
     if (useGpu)
