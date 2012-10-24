@@ -321,9 +321,11 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
 
     // update blur filter and btv weights
 
-    if (filter.empty() || blurKernelSize != curBlurKernelSize || blurSigma != curBlurSigma || y[0].type() != curSrcType)
+    if (filters.size() != src.size() || blurKernelSize != curBlurKernelSize || blurSigma != curBlurSigma || y[0].type() != curSrcType)
     {
-        filter = createGaussianFilter_GPU(y[0].type(), Size(blurKernelSize, blurKernelSize), blurSigma);
+        filters.resize(src.size());
+        for (size_t i = 0; i < src.size(); ++i)
+            filters[i] = createGaussianFilter_GPU(y[0].type(), Size(blurKernelSize, blurKernelSize), blurSigma);
         curBlurKernelSize = blurKernelSize;
         curBlurSigma = blurSigma;
         curSrcType = y[0].type();
@@ -355,7 +357,7 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
             // a = M * Ih
             gpu::remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
             // b = HM * Ih
-            filter->apply(a, b, Rect(0,0,-1,-1), streams[k]);
+            filters[k]->apply(a, b, Rect(0,0,-1,-1), streams[k]);
             // c = DHF * Ih
             gpu::resize(b, c, lowResSize, 0, 0, INTER_NEAREST, streams[k]);
 
@@ -364,7 +366,7 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
             // d = Dt * diff
             upscale(diff, d, scale, streams[k]);
             // b = HtDt * diff
-            filter->apply(d, b, Rect(0,0,-1,-1), streams[k]);
+            filters[k]->apply(d, b, Rect(0,0,-1,-1), streams[k]);
             // a = MtHtDt * diff
             gpu::remap(b, diffTerms[k], forward[k].first, forward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
         }

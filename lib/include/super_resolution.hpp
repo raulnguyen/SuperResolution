@@ -127,7 +127,7 @@ namespace cv
             std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > forward;
             std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > backward;
 
-            Ptr<gpu::FilterEngine_GPU> filter;
+            std::vector<Ptr<gpu::FilterEngine_GPU> > filters;
             int curBlurKernelSize;
             double curBlurSigma;
             int curSrcType;
