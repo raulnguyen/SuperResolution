@@ -298,6 +298,7 @@ int main(int argc, const char* argv[])
     double bcAvgMSSIM = 0.0;
     int count = 0;
 
+    cout << endl;
     cout << "-----------------------------------------------------------------" << endl;
     cout << "|   Ind    |  SuperRes PSNR / MSSIM  |   BiCubic PSNR / MSSIM   |" << endl;
     cout << "|----------|-------------------------|--------------------------|" << endl;
@@ -344,7 +345,7 @@ int main(int argc, const char* argv[])
             break;
     }
 
-    cout << "-----------------------------------------------------------------" << endl;
+    cout << "-----------------------------------------------------------------" << endl << endl;
 
     destroyAllWindows();
 
@@ -354,10 +355,10 @@ int main(int argc, const char* argv[])
     bcAvgMSSIM /= count;
 
     cout << "Super Resolution Avg PSNR  : " << srAvgPSNR << endl;
-    cout << "Super Resolution Avg MSSIM : " << srAvgMSSIM << endl;
+    cout << "Super Resolution Avg MSSIM : " << srAvgMSSIM << endl << endl;
 
     cout << "Bi-Cubic Resize  AVG PSNR  : " << bcAvgPSNR << endl;
-    cout << "Bi-Cubic Resize  AVG MSSIM : " << bcAvgMSSIM << endl;
+    cout << "Bi-Cubic Resize  AVG MSSIM : " << bcAvgMSSIM << endl << endl;
 
     return 0;
 }
