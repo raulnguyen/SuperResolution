@@ -84,8 +84,7 @@ namespace cv
             Mat highRes;
 
             Mat diffTerm, regTerm;
-            Mat diff;
-            Mat a, b, c, d;
+            Mat a, b, c;
         };
 
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
@@ -127,19 +126,17 @@ namespace cv
             std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > forward;
             std::vector<std::pair<gpu::GpuMat, gpu::GpuMat> > backward;
 
-            Ptr<gpu::FilterEngine_GPU> filter;
+            std::vector<Ptr<gpu::FilterEngine_GPU> > filters;
             int curBlurKernelSize;
             double curBlurSigma;
             int curSrcType;
 
             gpu::GpuMat highRes;
 
-            std::vector<gpu::GpuMat> diffTerms;
-            gpu::GpuMat regTerm;
-            gpu::GpuMat diff;
-            gpu::GpuMat a, b, c, d;
-
             std::vector<gpu::Stream> streams;
+            std::vector<gpu::GpuMat> diffTerms;
+            std::vector<gpu::GpuMat> a, b, c;
+            gpu::GpuMat regTerm;
         };
 
         using videostab::IFrameSource;

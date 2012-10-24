@@ -417,8 +417,6 @@ void cv::superres::BTV_L1_Base::run(const vector<Mat>& src, OutputArray dst, con
     a.create(highResSize, highRes.type());
     b.create(highResSize, highRes.type());
     c.create(lowResSize, highRes.type());
-    diff.create(lowResSize, highRes.type());
-    d.create(highResSize, highRes.type());
 
     for (int i = 0; i < iterations; ++i)
     {
@@ -433,12 +431,12 @@ void cv::superres::BTV_L1_Base::run(const vector<Mat>& src, OutputArray dst, con
             // c = DHM * Ih
             resize(b, c, lowResSize, 0, 0, INTER_NEAREST);
 
-            diffSign(y[k], c, diff);
+            diffSign(y[k], c, c);
 
-            // d = Dt * diff
-            upscale(diff, d, scale);
+            // a = Dt * diff
+            upscale(c, a, scale);
             // b = HtDt * diff
-            filter->apply(d, b);
+            filter->apply(a, b);
             // a = MtHtDt * diff
             remap(b, a, forward[k], noArray(), INTER_NEAREST);
 
