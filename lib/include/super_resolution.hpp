@@ -133,12 +133,10 @@ namespace cv
 
             gpu::GpuMat highRes;
 
-            std::vector<gpu::GpuMat> diffTerms;
-            gpu::GpuMat regTerm;
-            gpu::GpuMat diff;
-            gpu::GpuMat a, b, c, d;
-
             std::vector<gpu::Stream> streams;
+            std::vector<gpu::GpuMat> diffTerms;
+            std::vector<gpu::GpuMat> a, b, c;
+            gpu::GpuMat regTerm;
         };
 
         using videostab::IFrameSource;

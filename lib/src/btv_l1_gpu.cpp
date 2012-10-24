@@ -347,41 +347,44 @@ void cv::superres::BTV_L1_GPU_Base::run(const vector<GpuMat>& src, GpuMat& dst, 
 
     // iterations
 
-    diffTerms.resize(src.size());
     streams.resize(src.size());
+    diffTerms.resize(src.size());
+    a.resize(src.size());
+    b.resize(src.size());
+    c.resize(src.size());
 
     for (int i = 0; i < iterations; ++i)
     {
         for (size_t k = 0; k < y.size(); ++k)
         {
             // a = M * Ih
-            gpu::remap(highRes, a, backward[k].first, backward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
+            gpu::remap(highRes, a[k], backward[k].first, backward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
             // b = HM * Ih
-            filters[k]->apply(a, b, Rect(0,0,-1,-1), streams[k]);
+            filters[k]->apply(a[k], b[k], Rect(0,0,-1,-1), streams[k]);
             // c = DHF * Ih
-            gpu::resize(b, c, lowResSize, 0, 0, INTER_NEAREST, streams[k]);
+            gpu::resize(b[k], c[k], lowResSize, 0, 0, INTER_NEAREST, streams[k]);
 
-            diffSign(y[k], c, diff, streams[k]);
+            diffSign(y[k], c[k], c[k], streams[k]);
 
-            // d = Dt * diff
-            upscale(diff, d, scale, streams[k]);
+            // a = Dt * diff
+            upscale(c[k], a[k], scale, streams[k]);
             // b = HtDt * diff
-            filters[k]->apply(d, b, Rect(0,0,-1,-1), streams[k]);
-            // a = MtHtDt * diff
-            gpu::remap(b, diffTerms[k], forward[k].first, forward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
+            filters[k]->apply(a[k], b[k], Rect(0,0,-1,-1), streams[k]);
+            // diffTerm = MtHtDt * diff
+            gpu::remap(b[k], diffTerms[k], forward[k].first, forward[k].second, INTER_NEAREST, BORDER_REPLICATE, Scalar(), streams[k]);
         }
+
+        if (lambda > 0)
+            calcBtvRegularization(highRes, regTerm, btvKernelSize);
 
         for (size_t k = 0; k < y.size(); ++k)
             streams[k].waitForCompletion();
 
-        if (lambda > 0)
-        {
-            calcBtvRegularization(highRes, regTerm, btvKernelSize);
-            gpu::addWeighted(highRes, 1.0, regTerm, -tau * lambda, 0.0, highRes);
-        }
-
         for (size_t k = 0; k < y.size(); ++k)
             gpu::addWeighted(highRes, 1.0, diffTerms[k], tau, 0.0, highRes);
+
+        if (lambda > 0)
+            gpu::addWeighted(highRes, 1.0, regTerm, -tau * lambda, 0.0, highRes);
     }
 
     Rect inner(btvKernelSize, btvKernelSize, highRes.cols - 2 * btvKernelSize, highRes.rows - 2 * btvKernelSize);
