@@ -84,8 +84,7 @@ namespace cv
             Mat highRes;
 
             Mat diffTerm, regTerm;
-            Mat diff;
-            Mat a, b, c, d;
+            Mat a, b, c;
         };
 
         // S. Farsiu , D. Robinson, M. Elad, P. Milanfar. Fast and robust multiframe super resolution.
